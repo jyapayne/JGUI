@@ -39,21 +39,26 @@ def move():
     print surf.root_window.children[0].position
     surf.root_window.children[0].position += [1, 1]
 def click():
-    surf.root_window.injectMouseDown('mouse1')
+    surf.root_window.inject_mouse_down('mouse-left')
 def up():
-    surf.root_window.injectMouseUp('mouse1')
+    surf.root_window.inject_mouse_up('mouse-left')
 base.accept('d-repeat', move)
 base.accept('mouse1', click)
 base.accept('mouse1-up', up)
 
 def drawall(task):
     surf.draw()
-    if base.mouseWatcherNode.hasMouse():
-        x = base.win.getXSize() * (1 + base.mouseWatcherNode.getMouseX()) / 2
-        y = base.win.getYSize() * (1 - base.mouseWatcherNode.getMouseY()) / 2
-        surf.root_window.injectMousePosition([x, y])
     cairoTexture.setRamImage(surf.csurface.get_data())
     return task.cont
 
+def mousemove(task):
+    if base.mouseWatcherNode.hasMouse():
+        x = base.win.getXSize() * (1 + base.mouseWatcherNode.getMouseX()) / 2
+        y = base.win.getYSize() * (1 - base.mouseWatcherNode.getMouseY()) / 2
+        surf.root_window.inject_mouse_position([x, y])
+    return task.cont
+
+taskMgr.setupTaskChain('move_chain', numThreads=1)
+taskMgr.add(mousemove, 'mousemove', taskChain='move_chain')
 taskMgr.add(drawall, 'draw')
 run()
