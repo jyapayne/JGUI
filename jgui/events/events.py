@@ -31,7 +31,7 @@ class WindowEventSource(EventSource):
     types = ['mouse-enter', 'mouse-leave',
              'resize', 'move',
              'key-repeat', 'key-down', 'key-up',
-             'mouse-right-down', 'mouse-right-up',
-             'mouse-left-down', 'mouse-left-up',
-             'mouse-middle-down', 'mouse-middle-up',
+             'mouse-right', 'mouse-right-up',
+             'mouse-left', 'mouse-left-up',
+             'mouse-middle', 'mouse-middle-up',
              'scroll-up', 'scroll-down', 'drag']
