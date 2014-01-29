@@ -50,6 +50,12 @@ class Position(StructureBase):
         other = Position.from_value(other)
         return Position(self.x-other.x, self.y-other.y)
 
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
+    def __ne__(self, other):
+        return not(self == other)
+
     @classmethod
     def from_value(cls, value):
         if not value:
@@ -74,6 +80,12 @@ class Size(StructureBase):
     def __sub__(self, other):
         other = Size.from_value(other)
         return Size(self.width-other.width, self.height-other.height)
+
+    def __eq__(self, other):
+        return self.width == other.width and self.height == other.height
+
+    def __ne__(self, other):
+        return not(self == other)
 
     @classmethod
     def from_value(cls, value):
