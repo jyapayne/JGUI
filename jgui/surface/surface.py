@@ -1,6 +1,6 @@
 import cairo
 import math
-from .structures import Size, Position, Rectangle
+from .structures import Size, Position, Rectangle, Color
 from ..events.events import WindowEventSource
 
 class Surface(object):
@@ -44,6 +44,8 @@ class WindowSurface(object):
 
 
     def draw_circle(self, position, size, color=(1,1,1), outline_width=1.0, outline_color=(0,0,0), start_angle=0.0, end_angle=360.0):
+        color = Color.from_value(color)
+        outline_color = Color.from_value(outline_color)
         context = self.context
         position = Position.from_value(position)
         size = Size.from_value(size)
@@ -69,6 +71,8 @@ class WindowSurface(object):
     def draw_rounded_rect(self, position, size, color=(1,1,1), outline_width=1, outline_color=(0,0,0), corner_radius=10):
         position = Position.from_value(position)
         size = Size.from_value(size)
+        color = Color.from_value(color)
+        outline_color = Color.from_value(outline_color)
 
         context = self.context
         radius = corner_radius
@@ -85,7 +89,7 @@ class WindowSurface(object):
         context.arc(x + radius + outline_width/2.0, y + radius + outline_width/2.0, radius, 180 * degrees, 270 * degrees)
         context.close_path()
 
-        context.set_source_rgb(*color)
+        context.set_source_rgba(*color)
         context.fill_preserve()
         context.set_source_rgba(*outline_color)
         context.set_line_width(outline_width)
@@ -105,7 +109,7 @@ class WindowSurface(object):
 
 
 class Window(WindowEventSource, WindowSurface):
-    def __init__(self, name, position=None, size=None, context=None, draggable=False):
+    def __init__(self, name, position=None, size=None, context=None, draggable=False, resizable=False):
         super(Window, self).__init__()
         self.context = context
         self.name = name
@@ -122,6 +126,10 @@ class Window(WindowEventSource, WindowSurface):
         self.focused = False
         self.visible = True
         self.draggable = draggable
+        self.resizable = resizable
+
+        if resizable:
+            pass
 
         if self.draggable:
             self.accept('mouse-left-drag', self.drag)
@@ -132,7 +140,7 @@ class Window(WindowEventSource, WindowSurface):
         obj.position = mouse_pos - self.mouse_diff
 
     def click(self, obj, mouse_pos):
-        self.mouse_diff = mouse_pos - self.position
+        self.mouse_diff = mouse_pos - obj.position
 
     def click_up(self, obj, mouse_pos):
         self.mouse_diff = Position(0, 0)
@@ -211,6 +219,7 @@ class Window(WindowEventSource, WindowSurface):
                 if not self.mouse_in:
                     print 'mouse-enter', self.name
                     self.dispatch('mouse-enter', self)
+                    self.dispatch('hover', self)
                 self.mouse_in = True
             else:
                 if self.mouse_in:
