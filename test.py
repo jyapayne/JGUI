@@ -58,7 +58,6 @@ def mousemove(task):
         surf.root_window.inject_mouse_position([x, y])
     return task.cont
 
-taskMgr.setupTaskChain('move_chain', numThreads=1)
-taskMgr.add(mousemove, 'mousemove', taskChain='move_chain')
+taskMgr.add(mousemove, 'mousemove')
 taskMgr.add(drawall, 'draw')
 run()
