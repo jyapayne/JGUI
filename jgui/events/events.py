@@ -35,7 +35,7 @@ class WindowEventSource(EventSource):
     mouse_button_up_events = ['mouse-right-up', 'mouse-left-up',
                               'mouse-middle-up']
     mouse_button_events = mouse_button_down_events + mouse_button_up_events + mouse_button_drag_events
-    window_events = ['resize', 'move', 'focus', 'focus-lost']
+    window_events = ['resize', 'move', 'focus', 'focus-lost', 'resize-start', 'resize-end']
     key_events = ['key-down', 'key-up', 'key-repeat']
     types = mouse_events + mouse_wheel_events + mouse_button_events +\
             window_events + key_events

@@ -81,6 +81,11 @@ class Position(StructureBase):
         other = Position.from_value(other)
         return Position(self.x-other.x, self.y-other.y)
 
+    def __mul__(self, value):
+        if isinstance(value, (int, long, float)):
+            return Position(self.x*value, self.y*value)
+        raise Exception("Cannot multiply position by {}.".format(value.__class__.__name__))
+
     def __iter__(self):
         yield self.x
         yield self.y

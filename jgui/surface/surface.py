@@ -12,7 +12,7 @@ class Surface(object):
         else:
             self.context = context
         self.root_window = Window('root', Position(0,0), self.size, self.context)
-        self.root_window.add_child(Window('child', Position(0,0), [500,200], self.context, draggable=True, resizable=True))
+        self.root_window.add_child(Window('child', Position(0,0), [500,200], self.context, draggable=True, resizable=True, min_size=Size(40,40)))
         self.windows = [self.root_window]
 
     def setTopZero(self, context):
@@ -115,6 +115,7 @@ class Window(WindowEventSource, WindowSurface):
         self.name = name
         self.rectangle = Rectangle(position, size)
         self.children = []
+        self.min_size = kwargs.get('min_size', Size(1,1))
         self.parent = None
         self.mouse_pos = Position(-1, -1)
         self.mouse_diff = Position(0, 0)
@@ -128,6 +129,7 @@ class Window(WindowEventSource, WindowSurface):
         self.draggable = draggable
         self._resizable = resizable
         self.resizable = resizable
+
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -149,38 +151,146 @@ class Window(WindowEventSource, WindowSurface):
     def drag_handle(self, obj, mouse_pos):
         pass
 
-    def drag_top_handle(self, obj, mouse_pos):
-        print 'stuff'
+    def drag_bottomright_handle(self, obj, mouse_pos):
+        diff = mouse_pos - self.mouse_diff
+        old_size = Size.from_value(self.size)
+        self.size = self.size + diff
+        self.mouse_diff.y = obj.position.y + self.handle_diff.y
+        self.mouse_diff.x = obj.position.x + self.handle_diff.x
 
+    def drag_bottomleft_handle(self, obj, mouse_pos):
+        diff = mouse_pos - self.mouse_diff
+        old_size = Size.from_value(self.size)
+        new_pos = Position(self.position.x+diff.x, self.position.y)
+        new_size = Size(self.size.width - diff.x, self.size.height + diff.y)
+        if new_size.width <= self.min_size.width:
+            new_pos.x = self.position.x + self.size.width - self.min_size.width
+            new_size.width = self.min_size.width
+        self.position = new_pos
+        self.size = new_size
+
+        self.mouse_diff.y = obj.position.y + self.handle_diff.y
+        self.mouse_diff.x = obj.position.x + self.handle_diff.x
+
+    def drag_topright_handle(self, obj, mouse_pos):
+        diff = mouse_pos - self.mouse_diff
+        old_size = Size.from_value(self.size)
+        new_pos = Position(self.position.x, self.position.y + diff.y)
+        new_size = Size(self.size.width + diff.x, self.size.height - diff.y)
+        if new_size.height <= self.min_size.height:
+            new_pos.y = self.position.y + self.size.height - self.min_size.height
+            new_size.height = self.min_size.height
+
+        self.position = new_pos
+        self.size = new_size
+
+        self.mouse_diff.y = obj.position.y + self.handle_diff.y
+        self.mouse_diff.x = obj.position.x + self.handle_diff.x
+
+    def drag_topleft_handle(self, obj, mouse_pos):
+        diff = mouse_pos - self.mouse_diff
+        old_size = Size.from_value(self.size)
+        new_pos = Position(self.position.x + diff.x, self.position.y + diff.y)
+        new_size = Size(self.size.width - diff.x, self.size.height - diff.y)
+        if new_size.height <= self.min_size.height:
+            new_pos.y = self.position.y + self.size.height - self.min_size.height
+            new_size.height = self.min_size.height
+        if new_size.width <= self.min_size.width:
+            new_pos.x = self.position.x + self.size.width - self.min_size.width
+            new_size.width = self.min_size.width
+
+        self.position = new_pos
+        self.size = new_size
+
+        self.mouse_diff.y = obj.position.y + self.handle_diff.y
+        self.mouse_diff.x = obj.position.x + self.handle_diff.x
+
+    def drag_top_handle(self, obj, mouse_pos):
+        diff = mouse_pos - self.mouse_diff
+        old_size = Size.from_value(self.size)
+        new_pos = Position(self.position.x, self.position.y + diff.y)
+        new_size = Size(self.size.width, self.size.height - diff.y)
+        if new_size.height <= self.min_size.height:
+            new_pos.y = self.position.y + self.size.height - self.min_size.height
+            new_size.height = self.min_size.height
+        self.position = new_pos
+        self.size = new_size
+
+        self.mouse_diff.y = obj.position.y + self.handle_diff.y
+        self.mouse_diff.x = obj.position.x + self.handle_diff.x
+
+    def drag_left_handle(self, obj, mouse_pos):
+        diff = mouse_pos - self.mouse_diff
+        old_size = Size.from_value(self.size)
+        new_pos = Position(self.position.x+diff.x, self.position.y)
+        new_size = Size(self.size.width - diff.x, self.size.height)
+        if new_size.width <= self.min_size.width:
+            new_pos.x = self.position.x + self.size.width - self.min_size.width
+            new_size.width = self.min_size.width
+        self.position = new_pos
+        self.size = new_size
+
+        self.mouse_diff.x = obj.position.x + self.handle_diff.x
+
+    def drag_bottom_handle(self, obj, mouse_pos):
+        diff = mouse_pos - self.mouse_diff
+        old_height = self.size.height
+        self.size = Size(self.size.width, self.size.height+diff.y)
+
+        self.mouse_diff.y = obj.position.y + self.handle_diff.y
+
+    def drag_right_handle(self, obj, mouse_pos):
+        diff = mouse_pos - self.mouse_diff
+        old_width = self.size.width
+        self.size = Size(self.size.width + diff.x, self.size.height)
+
+        self.mouse_diff.x = obj.position.x + self.handle_diff.x
 
     def init_resize_handles(self):
         self.corner_handle_size = Size(20, 20)
         self.edge_buffer = Size(10, 10)
         self.edge_handle_width = 10
+        self.handle_diff = Position(0,0)
 
         self.top_handle = Window('top_handle')
         self.top_handle.accept('drag', self.drag_top_handle)
+        self.top_handle.accept('mouse-left', self.handle_click)
+        self.top_handle.accept('mouse-left-up', self.handle_click_up)
 
         self.topleft_handle = Window('topleft_handle')
-        self.topleft_handle.accept('drag', self.drag_handle)
+        self.topleft_handle.accept('drag', self.drag_topleft_handle)
+        self.topleft_handle.accept('mouse-left', self.handle_click)
+        self.topleft_handle.accept('mouse-left-up', self.handle_click_up)
 
         self.topright_handle = Window('topright_handle')
-        self.topright_handle.accept('drag', self.drag_handle)
+        self.topright_handle.accept('drag', self.drag_topright_handle)
+        self.topright_handle.accept('mouse-left', self.handle_click)
+        self.topright_handle.accept('mouse-left-up', self.handle_click_up)
 
         self.right_handle = Window('right_handle')
-        self.right_handle.accept('drag', self.drag_handle)
+        self.right_handle.accept('drag', self.drag_right_handle)
+        self.right_handle.accept('mouse-left', self.handle_click)
+        self.right_handle.accept('mouse-left-up', self.handle_click_up)
 
         self.bottomright_handle = Window('bottomright_handle')
-        self.bottomright_handle.accept('drag', self.drag_handle)
+        self.bottomright_handle.accept('drag', self.drag_bottomright_handle)
+        self.bottomright_handle.accept('mouse-left', self.handle_click)
+        self.bottomright_handle.accept('mouse-left-up', self.handle_click_up)
 
         self.bottom_handle = Window('bottom_handle')
-        self.bottom_handle.accept('drag', self.drag_handle)
+        self.bottom_handle.accept('drag', self.drag_bottom_handle)
+        self.bottom_handle.accept('mouse-left', self.handle_click)
+        self.bottom_handle.accept('mouse-left-up', self.handle_click_up)
 
         self.bottomleft_handle = Window('bottomleft_handle')
-        self.bottomleft_handle.accept('drag', self.drag_handle)
+        self.bottomleft_handle.accept('drag', self.drag_bottomleft_handle)
+        self.bottomleft_handle.accept('mouse-left', self.handle_click)
+        self.bottomleft_handle.accept('mouse-left-up', self.handle_click_up)
 
         self.left_handle = Window('left_handle')
-        self.left_handle.accept('drag', self.drag_handle)
+        self.left_handle.accept('drag', self.drag_left_handle)
+        self.left_handle.accept('mouse-left', self.handle_click)
+        self.left_handle.accept('mouse-left-up', self.handle_click_up)
 
 
         self.vertical_edge_size = Size()
@@ -195,7 +305,6 @@ class Window(WindowEventSource, WindowSurface):
         self.add_child(self.bottom_handle)
         self.add_child(self.bottomright_handle)
         self.add_child(self.bottomleft_handle)
-        print self.top_handle.rectangle
 
     def update_resize_handles(self):
         buffer = self.edge_buffer
@@ -210,7 +319,7 @@ class Window(WindowEventSource, WindowSurface):
         vertical_edge_size = self.vertical_edge_size
         horizontal_edge_size = self.horizontal_edge_size
         corner_handle_size = self.corner_handle_size
-        x, y = 0, 0
+        x, y = self.position.x, self.position.y
 
         vertical_edge_size.width = self.size.width-2*corner_handle_size.width
         vertical_edge_size.height = self.edge_handle_width
@@ -259,6 +368,16 @@ class Window(WindowEventSource, WindowSurface):
     def click_up(self, obj, mouse_pos):
         self.mouse_diff = Position(0, 0)
 
+    def handle_click_up(self, obj, mouse_pos):
+        self.mouse_diff = Position(0, 0)
+        self.handle_diff = Position(0, 0)
+        self.dispatch('resize-end', self)
+
+    def handle_click(self, obj, mouse_pos):
+        self.mouse_diff = mouse_pos
+        self.handle_diff = mouse_pos - obj.position
+        self.dispatch('resize-start', self)
+
     def show(self):
         self.visible = True
 
@@ -277,7 +396,6 @@ class Window(WindowEventSource, WindowSurface):
 
         for child in self.children:
             child.inject_mouse_down(button)
-
 
     def inject_mouse_up(self, button):
         if self.mouse_held() and self.mouse_inputs[button]:
@@ -399,9 +517,6 @@ class Window(WindowEventSource, WindowSurface):
                 child.position = child.position + diff
         self.rectangle.position = position
 
-        #if self.resizable:
-        #    self.update_resize_handles()
-
     @property
     def size(self):
         return self.rectangle.size
@@ -409,13 +524,18 @@ class Window(WindowEventSource, WindowSurface):
     @size.setter
     def size(self, size):
         size = Size.from_value(size)
+        if size.height <= self.min_size.height:
+            size.height = self.min_size.height
+        if size.width <= self.min_size.width:
+            size.width = self.min_size.width
         diff = size - self.rectangle.size
         if diff.height != 0 or diff.width != 0:
             self.dispatch('resize', self, size)
             for child in self.children:
-                child.size = child.size + diff
+                pass
+            #    child.size = child.size + diff
         self.rectangle.size = size
 
-        #if self.resizable:
-        #    self.update_resize_handles()
+        if self.resizable:
+            self.update_resize_handles()
 
