@@ -35,14 +35,12 @@ cairoTexture.setup2dTexture(Width, Height, Texture.TUnsignedByte, Texture.FRgba3
 
 screen.setTexture(cairoTexture)
 #screen.reparentTo(render2d)
-def move():
-    print surf.root_window.children[0].position
-    surf.root_window.children[0].position += [1, 1]
+
 def click():
-    surf.root_window.inject_mouse_down('mouse-left')
+    surf.inject_mouse_down('mouse-left')
 def up():
-    surf.root_window.inject_mouse_up('mouse-left')
-base.accept('d-repeat', move)
+    surf.inject_mouse_up('mouse-left')
+
 base.accept('mouse1', click)
 base.accept('mouse1-up', up)
 
@@ -55,7 +53,7 @@ def mousemove(task):
     if base.mouseWatcherNode.hasMouse():
         x = base.win.getXSize() * (1 + base.mouseWatcherNode.getMouseX()) / 2
         y = base.win.getYSize() * (1 - base.mouseWatcherNode.getMouseY()) / 2
-        surf.root_window.inject_mouse_position([x, y])
+        surf.inject_mouse_position([x, y])
     return task.cont
 
 taskMgr.add(mousemove, 'mousemove')
