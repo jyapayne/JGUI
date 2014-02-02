@@ -4,7 +4,7 @@ from .structures import Size, Position, Rectangle, Color
 from ..events.events import WindowEventSource
 
 class Surface(object):
-    def __init__(self, size=None, context=None):
+    def __init__(self, size=None, context=None, render_mouse=True):
         self.size = Size.from_value(size)
         if context is None:
             self.csurface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.size.width, self.size.height)
@@ -13,7 +13,10 @@ class Surface(object):
             self.context = context
         self.root_window = Window('root', Position(0,0), self.size, self.context)
         self.root_window.add_child(Window('child', Position(0,0), [500,200], self.context, draggable=True, resizable=True, min_size=Size(40,40)))
-        self.windows = [self.root_window]
+        self.render_mouse = render_mouse
+        if self.render_mouse:
+            self.mouse_icon = Mouse('mouse', Position(0, 0), Size(12,20), self.context)
+        self.windows = [self.root_window, self.mouse_icon]
 
     def setTopZero(self, context):
         context.identity_matrix()
@@ -22,10 +25,15 @@ class Surface(object):
         context.transform(matrix)
 
     def inject_mouse_position(self, pos):
+        if self.render_mouse:
+            self.mouse_icon.position = pos
         self.root_window.inject_mouse_position(pos)
 
     def inject_mouse_down(self, button):
         self.root_window.inject_mouse_down(button)
+
+    def inject_mouse_up(self, button):
+        self.root_window.inject_mouse_up(button)
 
     def draw(self):
         #self.setTopZero(ctx)
@@ -38,14 +46,22 @@ class Surface(object):
             window.draw()
 
 class WindowSurface(object):
+
+    line_joins = {'miter': cairo.LINE_JOIN_MITER,
+                  'round': cairo.LINE_JOIN_ROUND,
+                  'bevel': cairo.LINE_JOIN_BEVEL}
+
+    line_caps = {'round': cairo.LINE_CAP_ROUND,
+                 'butt': cairo.LINE_CAP_BUTT,
+                 'square': cairo.LINE_CAP_SQUARE}
+
     def __init__(self):
         super(WindowSurface, self).__init__()
-        #self.mouse_pos
 
 
-    def draw_circle(self, position, size, color=(1,1,1), outline_width=1.0, outline_color=(0,0,0), start_angle=0.0, end_angle=360.0):
+    def draw_circle(self, position, size, color=(1,1,1), line_width=1.0, line_color=(0,0,0), start_angle=0.0, end_angle=360.0):
         color = Color.from_value(color)
-        outline_color = Color.from_value(outline_color)
+        line_color = Color.from_value(line_color)
         context = self.context
         position = Position.from_value(position)
         size = Size.from_value(size)
@@ -55,24 +71,48 @@ class WindowSurface(object):
         x,y = (self.position.x+position.x+width/2,
                self.position.y+position.y+height/2)
 
-        context.set_line_width(outline_width)
+        context.set_line_width(line_width)
 
         context.save()
         context.translate(x, y)
-        context.scale(width/2.0-outline_width/2.0, height/2.0-outline_width/2.0)
+        context.scale(width/2.0-line_width/2.0, height/2.0-line_width/2.0)
         context.arc(0, 0, 1, start_angle, end_angle * math.pi/180.0)
         context.restore()
 
         context.set_source_rgba(*color)
         context.fill_preserve()
-        context.set_source_rgba(*outline_color)
+        context.set_source_rgba(*line_color)
         context.stroke()
 
-    def draw_rounded_rect(self, position, size, color=(1,1,1), outline_width=1, outline_color=(0,0,0), corner_radius=0):
+    def draw_lines(self, lines, line_color=(0,0,0,1), fill_color=(1,1,1,1), line_width=1, line_join='miter', line_cap='butt'):
+        if lines:
+            context = self.context
+            start_pos = self.position + lines[0]
+            context.set_line_width(line_width)
+            context.move_to(int(start_pos.x), int(start_pos.y))
+            for line in lines[1:]:
+                next_pos = self.position+line
+                context.line_to(next_pos.x, next_pos.y)
+            context.close_path()
+            try:
+                context.set_line_cap(self.line_joins[line_join])
+            except KeyError:
+                pass
+            try:
+                context.set_line_join(self.line_caps[line_cap])
+            except KeyError:
+                pass
+            context.set_source_rgba(*fill_color)
+            context.fill_preserve()
+            context.set_source_rgba(*line_color)
+            context.stroke()
+
+
+    def draw_rounded_rect(self, position, size, color=(1,1,1), line_width=1, line_color=(0,0,0), corner_radius=0):
         position = Position.from_value(position)
         size = Size.from_value(size)
         color = Color.from_value(color)
-        outline_color = Color.from_value(outline_color)
+        line_color = Color.from_value(line_color)
 
         context = self.context
         radius = corner_radius
@@ -83,20 +123,20 @@ class WindowSurface(object):
         height = size.height
 
         context.new_sub_path()
-        context.arc(x + width - radius - outline_width/2.0, y + radius + outline_width/2.0, radius, -90 * degrees, 0 * degrees)
-        context.arc(x + width - radius - outline_width/2.0, y + height - radius - outline_width/2.0, radius, 0 * degrees, 90 * degrees)
-        context.arc(x + radius + outline_width/2.0, y + height - radius - outline_width/2.0, radius, 90 * degrees, 180 * degrees)
-        context.arc(x + radius + outline_width/2.0, y + radius + outline_width/2.0, radius, 180 * degrees, 270 * degrees)
+        context.arc(x + width - radius - line_width/2.0, y + radius + line_width/2.0, radius, -90 * degrees, 0 * degrees)
+        context.arc(x + width - radius - line_width/2.0, y + height - radius - line_width/2.0, radius, 0 * degrees, 90 * degrees)
+        context.arc(x + radius + line_width/2.0, y + height - radius - line_width/2.0, radius, 90 * degrees, 180 * degrees)
+        context.arc(x + radius + line_width/2.0, y + radius + line_width/2.0, radius, 180 * degrees, 270 * degrees)
         context.close_path()
 
         context.set_source_rgba(*color)
         context.fill_preserve()
-        context.set_source_rgba(*outline_color)
-        context.set_line_width(outline_width)
+        context.set_source_rgba(*line_color)
+        context.set_line_width(line_width)
         context.stroke()
 
     def render(self):
-        self.draw_rounded_rect([0,0], [self.size.width, self.size.height], outline_width=min(self.size.width, self.size.height)/70 or 1, corner_radius=min(self.size.width, self.size.height)/10 or 3)
+        self.draw_rounded_rect([0,0], [self.size.width, self.size.height], line_width=min(self.size.width, self.size.height)/70 or 1, corner_radius=min(self.size.width, self.size.height)/10 or 3)
 
     def draw(self):
         if self.visible:
@@ -538,4 +578,20 @@ class Window(WindowEventSource, WindowSurface):
 
         if self.resizable:
             self.update_resize_handles()
+
+class Mouse(Window):
+
+    def __init__(self, *args,  **kwargs):
+        super(Mouse, self).__init__(*args, **kwargs)
+        self.lines = [
+                        [0, 0],
+                        [0, self.size.height*0.85],
+                        [self.size.width*0.32, self.size.height*0.675],
+                        [self.size.width*0.52, self.size.height*0.9],
+                        [self.size.width*0.72, self.size.height*0.85],
+                        [self.size.width*0.52, self.size.height*0.6],
+                        [self.size.width*0.92, self.size.height*0.6]
+                    ]
+    def render(self):
+        self.draw_lines(self.lines, line_width=self.size.height/20)
 
