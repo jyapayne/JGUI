@@ -9,11 +9,12 @@ class JGUIWidget(gtk.DrawingArea):
 
     def __init__(self, width, height):
         super(JGUIWidget, self).__init__()
-        self.surf = Surface([width, height])
+        self.surf = TestSurface([width, height])
         self.connect("expose_event", self.expose)
         self.connect("motion_notify_event", self.mousemoved)
         self.connect("button_press_event", self.mouse_down)
         self.connect("button_release_event", self.mouse_up)
+        self.connect("configure_event", self.resize_win)
         self.add_events(gdk.BUTTON_PRESS_MASK | gdk.BUTTON_RELEASE_MASK | gdk.POINTER_MOTION_MASK)
         gobject.timeout_add(int((1.0/60.0)*1000), self.tick)
         self.width, self.height = width, height
@@ -24,6 +25,9 @@ class JGUIWidget(gtk.DrawingArea):
 
     def mouse_down(self, widget, event):
         self.surf.inject_mouse_down(self.buttons[event.button])
+
+    def resize_win(self, widget, event):
+        self.surf.notify_window_resize(event.width, event.height)
 
     def tick(self):
         self.alloc = self.get_allocation()
