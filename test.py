@@ -8,7 +8,7 @@ import sys
 from direct.showbase.ShowBase import ShowBase
 from pandac.PandaModules import *
 
-from jgui.surface.surface import *
+from testclasses import *
 
 class Test(ShowBase):
     def __init__(self, width=1024, height=1024):

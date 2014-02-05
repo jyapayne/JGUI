@@ -1,4 +1,4 @@
-from jgui.surface.surface import *
+from testclasses import *
 import pygtk, gtk, gobject, cairo
 from gtk import gdk
 

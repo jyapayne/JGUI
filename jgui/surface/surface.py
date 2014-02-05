@@ -1,6 +1,6 @@
 import cairo
 import math
-from .structures import Size, Position, Rectangle, Color
+from .structures import Size, Position, Rectangle, Color, BorderRadius
 from ..events.events import WindowEventSource
 
 debug = True
@@ -13,10 +13,10 @@ class Surface(object):
             self.context = cairo.Context(self.csurface)
         else:
             self.context = context
-        self.root_window = Window('root', Position(0,0), self.size, self.context)
+        self.root_window = Window('root', position=Position(0,0), size=self.size, context=self.context)
         self.render_mouse = render_mouse
         if self.render_mouse:
-            self.mouse_icon = Mouse('mouse', Position(0, 0), Size(12,20), self.context)
+            self.mouse_icon = Mouse('mouse', position=Position(0, 0), size=Size(12,20), context=self.context)
         self.windows = [self.root_window, self.mouse_icon]
 
     def setTopZero(self, context):
@@ -59,14 +59,7 @@ class Surface(object):
         for window in self.windows:
             window.draw()
 
-class TestSurface(Surface):
-    def __init__(self, *args, **kwargs):
-        super(TestSurface, self).__init__(*args, **kwargs)
-        self.root_window.add_child(MyWindow('child', Position(0,0), [500,200], self.context, draggable=True, resizable=True, min_size=Size(40,40)))
-        self.root_window.add_child(TestWindow('child2', Position(200,200), [200,200], self.context, draggable=True))
-        child3 = TestWindow('child3', Position(300,300), [200,200], self.context, draggable=True)
-        child3.add_child(TestWindow('child3-1', Position(10,10), [50,50], self.context, draggable=True))
-        self.root_window.add_child(child3)
+
 
 class WindowSurface(object):
 
@@ -82,7 +75,7 @@ class WindowSurface(object):
         super(WindowSurface, self).__init__()
 
 
-    def draw_circle(self, position, size, color=(1,1,1), line_width=1.0, line_color=(0,0,0), start_angle=0.0, end_angle=360.0):
+    def draw_circle(self, position, size, color=(1,1,1,1), line_width=1.0, line_color=(0,0,0,1), start_angle=0.0, end_angle=360.0):
         color = Color.from_value(color)
         line_color = Color.from_value(line_color)
         context = self.context
@@ -107,12 +100,37 @@ class WindowSurface(object):
         context.set_source_rgba(*line_color)
         context.stroke()
 
-    def draw_lines(self, lines, line_color=(0,0,0,1), fill_color=(1,1,1,1), line_width=1, line_join='miter', line_cap='butt'):
+    def draw_text(self, text, position, size, color=(0,0,0,1), line_width=1.0, background_color=(1,1,1,0), fill_color=None):
+        color = Color.from_value(color)
+        background_color = Color.from_value(background_color)
+        position = Position.from_value(position)
+        size = Size.from_value(size)
+        context = self.context
+        width = size.width
+        height = size.height
+
+        context.set_line_width(line_width)
+        context.set_source_rgba(*color)
+        context.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        context.set_font_size(size.height)
+
+        extents = context.text_extents(text)
+
+        x,y = (self.position.x+position.x+2,
+               self.position.y+position.y+extents[3]+2)
+
+        context.move_to(x, y)
+        context.show_text(text)
+
+
+    def draw_lines(self, lines, line_color=(0,0,0,1), background_color=(1,1,1,1), line_width=1, line_join='miter', line_cap='butt'):
         if lines:
+            line_color = Color.from_value(line_color)
+            background_color = Color.from_value(background_color)
             context = self.context
             start_pos = self.position + lines[0]
             context.set_line_width(line_width)
-            context.move_to(int(start_pos.x), int(start_pos.y))
+            context.move_to(start_pos.x, start_pos.y)
             for line in lines[1:]:
                 next_pos = self.position+line
                 context.line_to(next_pos.x, next_pos.y)
@@ -125,17 +143,18 @@ class WindowSurface(object):
                 context.set_line_join(self.line_caps[line_cap])
             except KeyError:
                 pass
-            context.set_source_rgba(*fill_color)
+            context.set_source_rgba(*background_color)
             context.fill_preserve()
             context.set_source_rgba(*line_color)
             context.stroke()
 
 
-    def draw_rounded_rect(self, position, size, color=(1,1,1), line_width=1, line_color=(0,0,0), corner_radius=0, line_dashed=False, clip=False):
+    def draw_rounded_rect(self, position, size, background_color=(1,1,1), line_width=1, line_color=(0,0,0), corner_radius=0, line_dashed=False, clip=False):
         position = Position.from_value(position)
         size = Size.from_value(size)
-        color = Color.from_value(color)
+        background_color = Color.from_value(background_color)
         line_color = Color.from_value(line_color)
+        corner_radius = BorderRadius.from_value(corner_radius)
 
         context = self.context
         radius = corner_radius
@@ -144,23 +163,38 @@ class WindowSurface(object):
         y = position.y + self.position.y
         width = size.width
         height = size.height
-
         if clip: #clips the entire region so any child windows will be confined to the parent
-            context.arc(x + width - radius, y + radius, radius, -90 * degrees, 0 * degrees)
-            context.arc(x + width - radius, y + height - radius, radius, 0 * degrees, 90 * degrees)
-            context.arc(x + radius, y + height - radius, radius, 90 * degrees, 180 * degrees)
-            context.arc(x + radius, y + radius, radius, 180 * degrees, 270 * degrees)
+            context.arc(x + width - radius.topright - line_width/2.0,
+                        y + radius.topright + line_width/2.0,
+                        radius.topright+self.border_width/2.0, -90 * degrees, 0 * degrees)
+            context.arc(x + width - radius.bottomright - line_width/2.0,
+                        y + height - radius.bottomright - line_width/2.0,
+                        radius.bottomright+self.border_width/2.0, 0 * degrees, 90 * degrees)
+            context.arc(x + radius.bottomleft + line_width/2.0,
+                        y + height - radius.bottomleft - line_width/2.0,
+                        radius.bottomleft+self.border_width/2.0, 90 * degrees, 180 * degrees)
+            context.arc(x + radius.topleft + line_width/2.0,
+                        y + radius.topleft + line_width/2.0,
+                        radius.topleft+self.border_width/2.0, 180 * degrees, 270 * degrees)
             context.close_path()
             context.clip()
 
         context.new_path()
-        context.arc(x + width - radius - line_width/2.0, y + radius + line_width/2.0, radius, -90 * degrees, 0 * degrees)
-        context.arc(x + width - radius - line_width/2.0, y + height - radius - line_width/2.0, radius, 0 * degrees, 90 * degrees)
-        context.arc(x + radius + line_width/2.0, y + height - radius - line_width/2.0, radius, 90 * degrees, 180 * degrees)
-        context.arc(x + radius + line_width/2.0, y + radius + line_width/2.0, radius, 180 * degrees, 270 * degrees)
+        context.arc(x + width - radius.topright - line_width/2.0,
+                    y + radius.topright + line_width/2.0,
+                    radius.topright, -90 * degrees, 0 * degrees)
+        context.arc(x + width - radius.bottomright - line_width/2.0,
+                    y + height - radius.bottomright - line_width/2.0,
+                    radius.bottomright, 0 * degrees, 90 * degrees)
+        context.arc(x + radius.bottomleft + line_width/2.0,
+                    y + height - radius.bottomleft - line_width/2.0,
+                    radius.bottomleft, 90 * degrees, 180 * degrees)
+        context.arc(x + radius.topleft + line_width/2.0,
+                    y + radius.topleft + line_width/2.0,
+                    radius.topleft, 180 * degrees, 270 * degrees)
         context.close_path()
 
-        context.set_source_rgba(*color)
+        context.set_source_rgba(*background_color)
         context.fill_preserve()
         context.set_source_rgba(*line_color)
         context.set_line_width(line_width)
@@ -170,9 +204,26 @@ class WindowSurface(object):
         context.stroke()
         context.restore()
 
+        if clip: #clips the entire region so any child windows will be confined to the parent
+            context.arc(x + width - radius.topright - line_width/2.0,
+                        y + radius.topright + line_width/2.0,
+                        radius.topright-self.border_width/2.0, -90 * degrees, 0 * degrees)
+            context.arc(x + width - radius.bottomright - line_width/2.0,
+                        y + height - radius.bottomright - line_width/2.0,
+                        radius.bottomright-self.border_width/2.0, 0 * degrees, 90 * degrees)
+            context.arc(x + radius.bottomleft + line_width/2.0,
+                        y + height - radius.bottomleft - line_width/2.0,
+                        radius.bottomleft-self.border_width/2.0, 90 * degrees, 180 * degrees)
+            context.arc(x + radius.topleft + line_width/2.0,
+                        y + radius.topleft + line_width/2.0,
+                        radius.topleft-self.border_width/2.0, 180 * degrees, 270 * degrees)
+            context.close_path()
+            context.clip()
+
+
     def render(self):
-        if debug:
-            self.draw_rounded_rect([0,0], [self.size.width, self.size.height], color=(0,0,1,0.1), line_color=(0,0,1,0.4), line_width=1.5, corner_radius=2, line_dashed=True)
+        if debug and not self.ignore_debug:
+            self.draw_rounded_rect([0,0], [self.size.width, self.size.height], background_color=(0,0,1,0.1), line_color=(0,0,1,0.4), line_width=self.border_width+0.5, corner_radius=self.border_radius, line_dashed=True)
 
     def draw(self):
         if self.visible:
@@ -184,35 +235,55 @@ class WindowSurface(object):
 
 
 class Window(WindowEventSource, WindowSurface):
-    def __init__(self, name, position=None, size=None, context=None, draggable=False, resizable=False, **kwargs):
+    def __init__(self, name, **kwargs):
         super(Window, self).__init__()
-        self.context = context
+        self._draggable = False
+        self._resizable = False
+
         self.name = name
+
+        position = Position.from_value(kwargs.pop('position', Position()))
+        size = Size.from_value(kwargs.pop('size', Size()))
+        self.context = kwargs.pop('context', None)
+        self.min_size = kwargs.pop('min_size', Size(1,1))
+        self.corner_handle_size = kwargs.pop('corner_handle_size', Size(20, 20))
+        self.edge_handle_width = kwargs.pop('edge_handle_width', 10)
+        self.edge_handle_buffer = kwargs.pop('edge_handle_buffer', Size(5, 5))
+        self.border_width = kwargs.pop('border_width', 1)
+        self.border_color = Color.from_value(kwargs.pop('border_color', (0,0,0,0)))
+        self.background_color = Color.from_value(kwargs.pop('background_color', (0,0,0,0)))
+        self.border_radius = BorderRadius.from_value(kwargs.pop('border_radius', 1))
+        self.dashed_border = kwargs.pop('dashed_border', False)
+        self.clip_children = kwargs.pop('clip_children', False)
+        self.ignore_debug = kwargs.pop('ignore_debug', False)
+
         self.rectangle = Rectangle(position, size)
         self.children = []
-        self.min_size = kwargs.get('min_size', Size(1,1))
         self.parent = None
-        self.mouse_pos = Position(-1, -1)
+        self.mouse_pos = Position(size.width/2, size.height/2)
         self.mouse_diff = Position(0, 0)
         self.mouse_in = False
         self.mouse_hover = False
         self.mouse_down = False
-        self.old_mouse_down = False
         self.mouse_inputs = dict.fromkeys(self.mouse_button_down_events, False)
         self.focused = False
         self.visible = True
-        self.draggable = draggable
-        self._resizable = resizable
-        self.resizable = resizable
         self.accept('mouse-move', self.process_mouse_move)
+        self.resizable = kwargs.pop('resizable', self._resizable)
+        self.draggable = kwargs.pop('draggable', self._draggable)
 
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        if self.draggable:
-            self.accept('mouse-left-drag', self.drag)
-            self.accept('mouse-left', self.click)
-            self.accept('mouse-left-up', self.click_up)
+    def render(self):
+        super(Window, self).render()
+        self.draw_rounded_rect([0,0], [self.size.width, self.size.height],
+                               background_color=self.background_color,
+                               line_color=self.border_color,
+                               line_width=self.border_width,
+                               corner_radius=self.border_radius,
+                               line_dashed=self.dashed_border,
+                               clip=self.clip_children)
 
     @property
     def resizable(self):
@@ -220,12 +291,30 @@ class Window(WindowEventSource, WindowSurface):
 
     @resizable.setter
     def resizable(self, value):
-        self._resizable = value
-        if self._resizable:
+        if not self._resizable and value:
             self.init_resize_handles()
+        elif not value and self._resizable:
+            self.remove_resize_handles()
+        self._resizable = value
 
-    def drag_handle(self, obj, mouse_pos):
-        pass
+    @property
+    def draggable(self):
+        return self._draggable
+
+    @draggable.setter
+    def draggable(self, value):
+        self._draggable = value
+        self.enable_drag(self._draggable)
+
+    def enable_drag(self, value):
+        if value:
+            self.accept('mouse-left-drag', self.drag)
+            self.accept('mouse-left', self.click)
+            self.accept('mouse-left-up', self.click_up)
+        else:
+            self.reject('mouse-left-drag', self.drag)
+            self.reject('mouse-left', self.click)
+            self.reject('mouse-left-up', self.click_up)
 
     def drag_bottomright_handle(self, obj, mouse_pos):
         diff = mouse_pos - self.mouse_diff
@@ -322,10 +411,25 @@ class Window(WindowEventSource, WindowSurface):
 
         self.mouse_diff.x = obj.position.x + self.handle_diff.x
 
+    def remove_resize_handles(self):
+        self.remove_child(self.top_handle)
+        self.remove_child(self.topleft_handle)
+        self.remove_child(self.topright_handle)
+        self.remove_child(self.left_handle)
+        self.remove_child(self.right_handle)
+        self.remove_child(self.bottom_handle)
+        self.remove_child(self.bottomright_handle)
+        self.remove_child(self.bottomleft_handle)
+        self.top_handle = None
+        self.topleft_handle = None
+        self.topright_handle = None
+        self.left_handle = None
+        self.right_handle = None
+        self.bottom_handle = None
+        self.bottomright_handle = None
+        self.bottomleft_handle = None
+
     def init_resize_handles(self):
-        self.corner_handle_size = Size(20, 20)
-        self.edge_buffer = Size(10, 10)
-        self.edge_handle_width = 10
         self.handle_diff = Position(0,0)
 
         self.top_handle = Window('top_handle')
@@ -372,7 +476,6 @@ class Window(WindowEventSource, WindowSurface):
         self.vertical_edge_size = Size()
         self.horizontal_edge_size = Size()
 
-        self.update_resize_handles()
         self.add_child(self.top_handle)
         self.add_child(self.topleft_handle)
         self.add_child(self.topright_handle)
@@ -381,9 +484,10 @@ class Window(WindowEventSource, WindowSurface):
         self.add_child(self.bottom_handle)
         self.add_child(self.bottomright_handle)
         self.add_child(self.bottomleft_handle)
+        self.update_resize_handles()
 
     def update_resize_handles(self):
-        buffer = self.edge_buffer
+        buffer = self.edge_handle_buffer
         top = self.top_handle
         topleft = self.topleft_handle
         topright = self.topright_handle
@@ -397,43 +501,43 @@ class Window(WindowEventSource, WindowSurface):
         corner_handle_size = self.corner_handle_size
         x, y = self.position.x, self.position.y
 
-        vertical_edge_size.width = self.size.width-2*corner_handle_size.width
+        vertical_edge_size.width = self.size.width - 2*corner_handle_size.width
         vertical_edge_size.height = self.edge_handle_width
 
         horizontal_edge_size.width = self.edge_handle_width
-        horizontal_edge_size.height = self.size.height-2*corner_handle_size.height
+        horizontal_edge_size.height = self.size.height - 2*corner_handle_size.height
 
         top.position.x = x + corner_handle_size.width
-        top.position.y = y
-        top.size = vertical_edge_size
+        top.position.y = y - buffer.height
+        top.size = vertical_edge_size + [0, buffer.height]
 
-        topleft.position.x = x
-        topleft.position.y = y
-        topleft.size = corner_handle_size
+        topleft.position.x = x - buffer.width
+        topleft.position.y = y - buffer.height
+        topleft.size = corner_handle_size + buffer
 
-        topright.position.x = x + self.size.width-corner_handle_size.width
-        topright.position.y = y
-        topright.size = corner_handle_size
+        topright.position.x = x + self.size.width - corner_handle_size.width
+        topright.position.y = y - buffer.height
+        topright.size = corner_handle_size + buffer
 
         bottom.position.x = x + corner_handle_size.width
-        bottom.position.y = y + self.size.height-vertical_edge_size.height
-        bottom.size = vertical_edge_size
+        bottom.position.y = y + self.size.height - vertical_edge_size.height
+        bottom.size = vertical_edge_size + [0, buffer.height]
 
-        bottomleft.position.x = x
-        bottomleft.position.y = y + self.size.height-corner_handle_size.height
-        bottomleft.size = corner_handle_size
+        bottomleft.position.x = x - buffer.width
+        bottomleft.position.y = y + self.size.height - corner_handle_size.height
+        bottomleft.size = corner_handle_size + buffer
 
         bottomright.position.x = x + self.size.width-corner_handle_size.width
         bottomright.position.y = y + self.size.height-corner_handle_size.height
-        bottomright.size = corner_handle_size
+        bottomright.size = corner_handle_size + buffer
 
         right.position.x = x + self.size.width-horizontal_edge_size.width
         right.position.y = y + corner_handle_size.height
-        right.size = horizontal_edge_size
+        right.size = horizontal_edge_size + [buffer.width, 0]
 
-        left.position.x = x
+        left.position.x = x - buffer.width
         left.position.y = y + corner_handle_size.height
-        left.size = horizontal_edge_size
+        left.size = horizontal_edge_size + [buffer.width, 0]
 
     def drag(self, obj, mouse_pos):
         obj.position = mouse_pos - self.mouse_diff
@@ -502,17 +606,17 @@ class Window(WindowEventSource, WindowSurface):
 
     def grab_focus(self):
         self.focused = True
-        if self.parent is not None:
-            children = self.parent.children[:]
-            children.remove(self)
-            children.append(self)
+        parent = self
+        #Reorder all the windows so that they are drawn on top
+        while parent is not None:
+            if parent.parent is not None:
+                children = parent.parent.children[:]
+                children.remove(parent)
+                children.append(parent)
 
-            self.parent.children = children
-            parent = self.parent
+                parent.parent.children = children
 
-            while parent is not None:
-                parent.grab_focus()
-                parent = parent.parent
+            parent = parent.parent
 
         self.dispatch('focus', self)
 
@@ -601,7 +705,7 @@ class Window(WindowEventSource, WindowSurface):
     def add_child(self, child_window):
         if child_window not in self.children:
             child_window.parent = self
-            child_window.position = child_window.position + self.position
+            child_window.position = child_window.position + self.position + [self.border_width/2, self.border_width/2]
             child_window.context = self.context
             self.children.append(child_window)
 
@@ -648,77 +752,6 @@ class Window(WindowEventSource, WindowSurface):
         if self.resizable:
             self.update_resize_handles()
 
-class MyWindow(Window):
-    def render(self):
-        self.draw_rounded_rect([0,0], [self.size.width, self.size.height], line_width=2, corner_radius=3)
-
-
-class TestWindow(Window):
-
-    def draw_test(self, position, size, color=(1,1,1), line_width=1, line_color=(0,0,0), corner_radius=0):
-        position = Position.from_value(position)
-        size = Size.from_value(size)
-        color = Color.from_value(color)
-        line_color = Color.from_value(line_color)
-
-        context = self.context
-        radius = corner_radius
-        degrees = math.pi / 180.0
-        x = position.x + self.position.x
-        y = position.y + self.position.y
-        width = size.width
-        height = size.height
-
-        context.new_sub_path()
-        context.set_source_rgba(0,0,1)
-        context.set_line_width(line_width)
-        context.arc(x + width - radius - line_width/2.0, y + radius + line_width/2.0, radius, -90 * degrees, -45 * degrees)
-        point = context.get_current_point()
-        context.stroke()
-        context.move_to(*point)
-        context.set_source_rgba(1,0,1)
-        context.set_line_width(10)
-        context.arc(x + width - radius - line_width/2.0, y + radius + line_width/2.0, radius, -45 * degrees, 0 * degrees)
-        context.line_to(x + width - line_width/2.0, y + height - radius - line_width/2.0)
-        context.arc(x + width - radius - line_width/2.0, y + height - radius - line_width/2.0, radius, 0 * degrees, 45 * degrees)
-        point = context.get_current_point()
-        context.stroke()
-        context.move_to(*point)
-        context.set_source_rgba(1,0,0)
-        context.set_line_width(line_width)
-        context.arc(x + width - radius - line_width/2.0, y + height - radius - line_width/2.0, radius, 45 * degrees, 90 * degrees)
-        context.line_to(x + radius + line_width/2.0, y + height - line_width/2.0)
-        context.arc(x + radius + line_width/2.0, y + height - radius - line_width/2.0, radius, 90 * degrees, 135 * degrees)
-        point = context.get_current_point()
-        context.stroke()
-        context.move_to(*point)
-        context.set_source_rgba(0,1,0)
-        context.set_line_width(line_width)
-        context.arc(x + radius + line_width/2.0, y + height - radius - line_width/2.0, radius, 135 * degrees, 180 * degrees)
-        context.line_to(x + line_width/2.0, y + radius + line_width/2.0)
-        context.arc(x + radius + line_width/2.0, y + radius + line_width/2.0, radius, 180 * degrees, 225 * degrees)
-        point = context.get_current_point()
-        context.stroke()
-        context.move_to(*point)
-        context.set_source_rgba(0,0,1)
-        context.set_line_width(line_width)
-        context.arc(x + radius + line_width/2.0, y + radius + line_width/2.0, radius, 225 * degrees, 270 * degrees)
-        context.line_to(x + width - radius - line_width/2.0, y + line_width/2.0)
-        context.stroke()
-
-        context.new_sub_path()
-        context.arc(x + width - radius - line_width/2.0, y + radius + line_width/2.0, radius, -90 * degrees, 0 * degrees)
-        context.arc(x + width - radius - line_width/2.0, y + height - radius - line_width/2.0, radius, 0 * degrees, 90 * degrees)
-        context.arc(x + radius + line_width/2.0, y + height - radius - line_width/2.0, radius, 90 * degrees, 180 * degrees)
-        context.arc(x + radius + line_width/2.0, y + radius + line_width/2.0, radius, 180 * degrees, 270 * degrees)
-        context.close_path()
-
-        context.set_source_rgba(*color)
-        context.fill()
-
-    def render(self):
-        self.draw_test([0,0], [self.size.width, self.size.height], corner_radius=10)
-
 class Mouse(Window):
     def __init__(self, *args,  **kwargs):
         super(Mouse, self).__init__(*args, **kwargs)
@@ -734,3 +767,12 @@ class Mouse(Window):
     def render(self):
         self.draw_lines(self.lines, line_width=self.size.height/20)
 
+
+class TextWindow(Window):
+    def __init__(self, name, text, *args, **kwargs):
+        super(TextWindow, self).__init__(name, *args, **kwargs)
+        self.text = text
+
+    def render(self):
+        super(TextWindow, self).render()
+        self.draw_text(self.text, [0,0], self.size)

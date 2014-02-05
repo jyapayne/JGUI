@@ -100,13 +100,65 @@ class Size(StructureBase):
         other = Size.from_value(other)
         return Size(self.width+other.width, self.height+other.height)
 
+    def __lt__(self, other):
+        other = Size.from_value(other)
+        return self.area() < other.area()
+
+    def __gt__(self, other):
+        other = Size.from_value(other)
+        return self.area() > other.area()
+
     def __sub__(self, other):
         other = Size.from_value(other)
         return Size(self.width-other.width, self.height-other.height)
 
+    def __mul__(self, other):
+        if isinstance(other, (int, long, float)):
+            return Size(self.width*other, self.height*other)
+
+    def area(self):
+        return self.width*self.height
+
     def __iter__(self):
         yield self.width
         yield self.height
+
+
+class BorderRadius(StructureBase):
+    def __init__(self, *args, **kwargs):
+        values = self._parse_value(args)
+        self.topleft = kwargs.get('topleft', values[0])
+        self.topright = kwargs.get('topright', values[1])
+        self.bottomright = kwargs.get('bottomright', values[2])
+        self.bottomleft = kwargs.get('bottomleft', values[3])
+
+
+    def __iter__(self):
+        yield self.topleft
+        yield self.topright
+        yield self.bottomright
+        yield self.bottomleft
+
+    @classmethod
+    def _parse_value(cls, value):
+        f = lambda *args: args
+        try:
+            args = f(*value)
+            if len(args) == 1:
+                return args*4
+            if len(args) == 2:
+                return args*2
+            if len(args) == 3:
+                return [args[0], args[1], args[2], args[1]]
+            if len(args) == 4:
+                return args
+        except TypeError:
+            return [value]*4
+        return [0]*4
+
+    @classmethod
+    def from_value(cls, value):
+        return cls(*cls._parse_value(value))
 
 
 class Color(StructureBase):
