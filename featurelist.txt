@@ -1,0 +1,13 @@
+- Draggable windows ✔
+- Resizable windows ✔
+- Windows can calculate minimum size to fit children
+- Anchors
+    - Anchor to left, center, right or top, middle, bottom
+
+- Background images
+- Drop shadows
+- Gradients
+- Independent border colors/sizes with joining corners
+- Animations and Time delta
+- Text windows
+- XML export and import
