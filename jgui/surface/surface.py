@@ -4,6 +4,7 @@ import pangocairo as pc
 import math
 from .structures import Size, Position, Rectangle, Color, BorderRadius, Padding
 from ..events.events import WindowEventSource
+from ..logger import log
 
 debug = True
 
@@ -289,7 +290,7 @@ class Window(WindowEventSource, WindowSurface):
 
         position = Position.from_value(kwargs.pop('position', Position()))
         size = Size.from_value(kwargs.pop('size', Size()))
-        self.context = kwargs.pop('context', None)
+        self._context = kwargs.pop('context', None)
         self.min_size = Size.from_value(kwargs.pop('min_size', Size(1,1)))
         self.max_size = Size.from_value(kwargs.pop('max_size', Size(-1,-1)))
         self.corner_handle_size = Size.from_value(kwargs.pop('corner_handle_size', Size(20, 20)))
@@ -318,6 +319,7 @@ class Window(WindowEventSource, WindowSurface):
         self.accept('mouse-move', self.process_mouse_move)
         self.size = size
         self.position = position
+        self.context = self._context
         self.resizable = kwargs.pop('resizable', self._resizable)
         self.draggable = kwargs.pop('draggable', self._draggable)
 
@@ -638,7 +640,7 @@ class Window(WindowEventSource, WindowSurface):
 
     def inject_mouse_down(self, button):
         if self.mouse_inside():
-            print button, self.name
+            log(button, self.name)
             self.mouse_inputs[button] = True
             self.mouse_down = True
             self.grab_focus()
@@ -651,7 +653,7 @@ class Window(WindowEventSource, WindowSurface):
 
     def inject_mouse_up(self, button):
         if self.mouse_held() and self.mouse_inputs[button]:
-            print button+'-up', self.name
+            log(button+'-up', self.name)
             self.mouse_down = False
             self.mouse_inputs[button] = False
             self.dispatch('{}-up'.format(button), self, self.mouse_pos)
@@ -694,7 +696,7 @@ class Window(WindowEventSource, WindowSurface):
 
     def release_focus(self):
         if self.focused:
-            print 'released', self.name
+            log('released', self.name)
             self.focused = False
             self.mouse_down = False
             #clear events that may have been triggered
@@ -764,15 +766,25 @@ class Window(WindowEventSource, WindowSurface):
         if not self.mouse_held():
             if mouse_focus:
                 if not self.mouse_in:
-                    print 'mouse-enter', self.name
+                    log('mouse-enter', self.name)
                     self.dispatch('mouse-enter', self)
                     self.dispatch('hover', self)
                 self.mouse_in = True
             else:
                 if self.mouse_in:
-                    print 'mouse-leave', self.name
+                    log('mouse-leave', self.name)
                     self.dispatch('mouse-leave', self)
                 self.mouse_in = False
+
+    @property
+    def context(self):
+        return self._context
+
+    @context.setter
+    def context(self, context):
+        self._context = context
+        for child in self.children:
+            child.context = self._context
 
     def add_child(self, child_window):
         if child_window not in self.children:

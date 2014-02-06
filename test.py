@@ -64,6 +64,8 @@ class Test(ShowBase):
         if width != self.width or height != self.height:
             self.width, self.height = width, height
             cairoTexture = Texture()
+            cairoTexture.setMagfilter(Texture.FTNearest)
+            cairoTexture.setMinfilter(Texture.FTNearest)
             cairoTexture.setXSize(self.width)
             cairoTexture.setYSize(self.height)
             cairoTexture.setFormat(cairoTexture.FRgba8)
