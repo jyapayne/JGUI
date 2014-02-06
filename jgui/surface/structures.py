@@ -117,6 +117,8 @@ class Size(StructureBase):
             return Size(self.width*other, self.height*other)
 
     def area(self):
+        if self.width < 0 or self.height < 0:
+            return -1
         return self.width*self.height
 
     def __iter__(self):
@@ -124,21 +126,7 @@ class Size(StructureBase):
         yield self.height
 
 
-class BorderRadius(StructureBase):
-    def __init__(self, *args, **kwargs):
-        values = self._parse_value(args)
-        self.topleft = kwargs.get('topleft', values[0])
-        self.topright = kwargs.get('topright', values[1])
-        self.bottomright = kwargs.get('bottomright', values[2])
-        self.bottomleft = kwargs.get('bottomleft', values[3])
-
-
-    def __iter__(self):
-        yield self.topleft
-        yield self.topright
-        yield self.bottomright
-        yield self.bottomleft
-
+class FourValueStructure(StructureBase):
     @classmethod
     def _parse_value(cls, value):
         f = lambda *args: args
@@ -159,6 +147,36 @@ class BorderRadius(StructureBase):
     @classmethod
     def from_value(cls, value):
         return cls(*cls._parse_value(value))
+
+
+class BorderRadius(FourValueStructure):
+    def __init__(self, *args, **kwargs):
+        values = self._parse_value(args)
+        self.topleft = kwargs.get('topleft', values[0])
+        self.topright = kwargs.get('topright', values[1])
+        self.bottomright = kwargs.get('bottomright', values[2])
+        self.bottomleft = kwargs.get('bottomleft', values[3])
+
+    def __iter__(self):
+        yield self.topleft
+        yield self.topright
+        yield self.bottomright
+        yield self.bottomleft
+
+
+class Padding(FourValueStructure):
+    def __init__(self, *args, **kwargs):
+        values = self._parse_value(args)
+        self.top = kwargs.get('top', values[0])
+        self.right = kwargs.get('right', values[1])
+        self.bottom = kwargs.get('bottom', values[2])
+        self.left = kwargs.get('left', values[3])
+
+    def __iter__(self):
+        yield self.top
+        yield self.right
+        yield self.bottom
+        yield self.left
 
 
 class Color(StructureBase):
@@ -264,6 +282,26 @@ class Rectangle(StructureBase):
     @size.setter
     def size(self, size):
         self._size = Size.from_value(size)
+
+    def contains(self, other):
+        other = Rectangle.from_value(other)
+        if self.intersects_with(other.position) and\
+           self.intersects_with(other.position + other.size - [1,1]):
+            return True
+        return False
+
+    def intersection(self, other):
+        other = Rectangle.from_value(other)
+        if other.contains(self):
+            return self
+        elif self.contains(other):
+            return other
+        if self.intersects_with(other.position):
+            return Rectangle(other.position, self.position + self.size - other.position)
+        elif other.intersects_with(self.position):
+            return Rectangle(self.position, other.position + other.size - self.position)
+        else:
+            return Rectangle()
 
     def intersects_with(self, position):
         """Checks if the position is within the bounds of the rectangle including the edges"""

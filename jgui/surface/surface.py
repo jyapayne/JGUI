@@ -1,6 +1,8 @@
 import cairo
+import pango
+import pangocairo as pc
 import math
-from .structures import Size, Position, Rectangle, Color, BorderRadius
+from .structures import Size, Position, Rectangle, Color, BorderRadius, Padding
 from ..events.events import WindowEventSource
 
 debug = True
@@ -71,9 +73,31 @@ class WindowSurface(object):
                  'butt': cairo.LINE_CAP_BUTT,
                  'square': cairo.LINE_CAP_SQUARE}
 
+    font_weights = {'bold': pango.WEIGHT_BOLD,
+                    'normal': pango.WEIGHT_NORMAL,
+                    'book': pango.WEIGHT_BOOK,
+                    'heavy': pango.WEIGHT_HEAVY,
+                    'light': pango.WEIGHT_LIGHT,
+                    'medium': pango.WEIGHT_MEDIUM,
+                    'semibold': pango.WEIGHT_SEMIBOLD,
+                    'thin': pango.WEIGHT_THIN,
+                    'ultrabold': pango.WEIGHT_ULTRABOLD,
+                    'ultraheavy': pango.WEIGHT_ULTRAHEAVY,
+                    'ultralight': pango.WEIGHT_ULTRALIGHT}
+
+    font_styles = {'italic': pango.STYLE_ITALIC,
+                   'oblique': pango.STYLE_OBLIQUE,
+                   'normal': pango.STYLE_NORMAL}
+
+    wrap_modes = {'word': pango.WRAP_WORD,
+                  'char': pango.WRAP_CHAR,
+                  'word_char': pango.WRAP_WORD_CHAR}
+
+    font_map = pc.cairo_font_map_get_default()
+    font_list = [f.get_name() for f in font_map.list_families()]
+
     def __init__(self):
         super(WindowSurface, self).__init__()
-
 
     def draw_circle(self, position, size, color=(1,1,1,1), line_width=1.0, line_color=(0,0,0,1), start_angle=0.0, end_angle=360.0):
         color = Color.from_value(color)
@@ -100,27 +124,48 @@ class WindowSurface(object):
         context.set_source_rgba(*line_color)
         context.stroke()
 
-    def draw_text(self, text, position, size, color=(0,0,0,1), line_width=1.0, background_color=(1,1,1,0), fill_color=None):
-        color = Color.from_value(color)
+    def draw_text(self, text, position, font_size=12,
+                  font_weight='normal',
+                  font_style='normal', font_color=(0,0,0,1),
+                  font_family='Sans', word_wrap='word',
+                  alignment=pango.ALIGN_LEFT, line_width=1.0,
+                  background_color=(1,1,1,0), fill_color=None):
+
+        color = Color.from_value(font_color)
         background_color = Color.from_value(background_color)
         position = Position.from_value(position)
-        size = Size.from_value(size)
         context = self.context
-        width = size.width
-        height = size.height
+        font_weight = self.font_weights[font_weight]
+        font_style = self.font_styles[font_style]
+
+        pc_context = pc.CairoContext(context)
+        pc_context.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
+        layout = pc_context.create_layout()
+        font = pango.FontDescription('{} {}'.format(font_family, font_size))
+        font.set_weight(font_weight)
+        font.set_style(font_style)
+
+        layout.set_font_description(font)
+        layout.set_text(text)
+        layout.set_wrap(self.wrap_modes[word_wrap])
+        width = self.size.width - (self.padding.left + self.padding.right)
+        layout.set_width(int(width*pango.SCALE))
+        layout.set_alignment(alignment)
 
         context.set_line_width(line_width)
-        context.set_source_rgba(*color)
-        context.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-        context.set_font_size(size.height)
+        context.set_source_rgba(*font_color)
+        #context.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        #context.set_font_size(size.height)
 
         extents = context.text_extents(text)
 
-        x,y = (self.position.x+position.x+2,
-               self.position.y+position.y+extents[3]+2)
+        x,y = (self.position.x+position.x+self.padding.left,
+               self.position.y+position.y+self.padding.top)
 
         context.move_to(x, y)
-        context.show_text(text)
+        pc_context.update_layout(layout)
+        pc_context.show_layout(layout)
+        #context.show_text(text)
 
 
     def draw_lines(self, lines, line_color=(0,0,0,1), background_color=(1,1,1,1), line_width=1, line_join='miter', line_cap='butt'):
@@ -245,19 +290,21 @@ class Window(WindowEventSource, WindowSurface):
         position = Position.from_value(kwargs.pop('position', Position()))
         size = Size.from_value(kwargs.pop('size', Size()))
         self.context = kwargs.pop('context', None)
-        self.min_size = kwargs.pop('min_size', Size(1,1))
-        self.corner_handle_size = kwargs.pop('corner_handle_size', Size(20, 20))
+        self.min_size = Size.from_value(kwargs.pop('min_size', Size(1,1)))
+        self.max_size = Size.from_value(kwargs.pop('max_size', Size(-1,-1)))
+        self.corner_handle_size = Size.from_value(kwargs.pop('corner_handle_size', Size(20, 20)))
         self.edge_handle_width = kwargs.pop('edge_handle_width', 10)
-        self.edge_handle_buffer = kwargs.pop('edge_handle_buffer', Size(5, 5))
+        self.edge_handle_buffer = Size.from_value(kwargs.pop('edge_handle_buffer', Size(5, 5)))
         self.border_width = kwargs.pop('border_width', 1)
         self.border_color = Color.from_value(kwargs.pop('border_color', (0,0,0,0)))
         self.background_color = Color.from_value(kwargs.pop('background_color', (0,0,0,0)))
         self.border_radius = BorderRadius.from_value(kwargs.pop('border_radius', 1))
+        self.padding = Padding.from_value(kwargs.pop('padding', 0))
         self.dashed_border = kwargs.pop('dashed_border', False)
         self.clip_children = kwargs.pop('clip_children', False)
         self.ignore_debug = kwargs.pop('ignore_debug', False)
 
-        self.rectangle = Rectangle(position, size)
+        self.rectangle = Rectangle()
         self.children = []
         self.parent = None
         self.mouse_pos = Position(size.width/2, size.height/2)
@@ -269,6 +316,8 @@ class Window(WindowEventSource, WindowSurface):
         self.focused = False
         self.visible = True
         self.accept('mouse-move', self.process_mouse_move)
+        self.size = size
+        self.position = position
         self.resizable = kwargs.pop('resizable', self._resizable)
         self.draggable = kwargs.pop('draggable', self._draggable)
 
@@ -316,6 +365,25 @@ class Window(WindowEventSource, WindowSurface):
             self.reject('mouse-left', self.click)
             self.reject('mouse-left-up', self.click_up)
 
+    def _restrict_pos_size(self, new_pos, new_size):
+        if new_size.height <= self.min_size.height:
+            new_pos.y = self.position.y + self.size.height - self.min_size.height
+            new_size.height = self.min_size.height
+
+        if new_size.width <= self.min_size.width:
+            new_pos.x = self.position.x + self.size.width - self.min_size.width
+            new_size.width = self.min_size.width
+
+        if self.max_size.height > -1 and new_size.height >= self.max_size.height:
+            new_pos.y = self.position.y + self.size.height - self.max_size.height
+            new_size.height = self.max_size.height
+
+        if self.max_size.width > -1 and new_size.width >= self.max_size.width:
+            new_pos.x = self.position.x + self.size.width - self.max_size.width
+            new_size.width = self.max_size.width
+
+        return new_pos, new_size
+
     def drag_bottomright_handle(self, obj, mouse_pos):
         diff = mouse_pos - self.mouse_diff
         old_size = Size.from_value(self.size)
@@ -326,13 +394,16 @@ class Window(WindowEventSource, WindowSurface):
     def drag_bottomleft_handle(self, obj, mouse_pos):
         diff = mouse_pos - self.mouse_diff
         old_size = Size.from_value(self.size)
-        new_pos = Position(self.position.x+diff.x, self.position.y)
+        new_pos = Position(self.position.x + diff.x, self.position.y)
         new_size = Size(self.size.width - diff.x, self.size.height + diff.y)
-        if new_size.width <= self.min_size.width:
-            new_pos.x = self.position.x + self.size.width - self.min_size.width
-            new_size.width = self.min_size.width
-        self.position = new_pos
-        self.size = new_size
+
+        new_pos, new_size = self._restrict_pos_size(new_pos, new_size)
+
+        if self.draggable:
+            self.position = new_pos
+            self.size = new_size
+        else:
+            self.size = [self.size.width, new_size.height]
 
         self.mouse_diff.y = obj.position.y + self.handle_diff.y
         self.mouse_diff.x = obj.position.x + self.handle_diff.x
@@ -342,12 +413,14 @@ class Window(WindowEventSource, WindowSurface):
         old_size = Size.from_value(self.size)
         new_pos = Position(self.position.x, self.position.y + diff.y)
         new_size = Size(self.size.width + diff.x, self.size.height - diff.y)
-        if new_size.height <= self.min_size.height:
-            new_pos.y = self.position.y + self.size.height - self.min_size.height
-            new_size.height = self.min_size.height
 
-        self.position = new_pos
-        self.size = new_size
+        new_pos, new_size = self._restrict_pos_size(new_pos, new_size)
+
+        if self.draggable:
+            self.position = new_pos
+            self.size = new_size
+        else:
+            self.size = [new_size.width, self.size.height]
 
         self.mouse_diff.y = obj.position.y + self.handle_diff.y
         self.mouse_diff.x = obj.position.x + self.handle_diff.x
@@ -357,15 +430,12 @@ class Window(WindowEventSource, WindowSurface):
         old_size = Size.from_value(self.size)
         new_pos = Position(self.position.x + diff.x, self.position.y + diff.y)
         new_size = Size(self.size.width - diff.x, self.size.height - diff.y)
-        if new_size.height <= self.min_size.height:
-            new_pos.y = self.position.y + self.size.height - self.min_size.height
-            new_size.height = self.min_size.height
-        if new_size.width <= self.min_size.width:
-            new_pos.x = self.position.x + self.size.width - self.min_size.width
-            new_size.width = self.min_size.width
 
-        self.position = new_pos
-        self.size = new_size
+        new_pos, new_size = self._restrict_pos_size(new_pos, new_size)
+
+        if self.draggable:
+            self.position = new_pos
+            self.size = new_size
 
         self.mouse_diff.y = obj.position.y + self.handle_diff.y
         self.mouse_diff.x = obj.position.x + self.handle_diff.x
@@ -375,11 +445,12 @@ class Window(WindowEventSource, WindowSurface):
         old_size = Size.from_value(self.size)
         new_pos = Position(self.position.x, self.position.y + diff.y)
         new_size = Size(self.size.width, self.size.height - diff.y)
-        if new_size.height <= self.min_size.height:
-            new_pos.y = self.position.y + self.size.height - self.min_size.height
-            new_size.height = self.min_size.height
-        self.position = new_pos
-        self.size = new_size
+
+        new_pos, new_size = self._restrict_pos_size(new_pos, new_size)
+
+        if self.draggable:
+            self.position = new_pos
+            self.size = new_size
 
         self.mouse_diff.y = obj.position.y + self.handle_diff.y
         self.mouse_diff.x = obj.position.x + self.handle_diff.x
@@ -389,11 +460,12 @@ class Window(WindowEventSource, WindowSurface):
         old_size = Size.from_value(self.size)
         new_pos = Position(self.position.x+diff.x, self.position.y)
         new_size = Size(self.size.width - diff.x, self.size.height)
-        if new_size.width <= self.min_size.width:
-            new_pos.x = self.position.x + self.size.width - self.min_size.width
-            new_size.width = self.min_size.width
-        self.position = new_pos
-        self.size = new_size
+
+        new_pos, new_size = self._restrict_pos_size(new_pos, new_size)
+
+        if self.draggable:
+            self.position = new_pos
+            self.size = new_size
 
         self.mouse_diff.x = obj.position.x + self.handle_diff.x
 
@@ -705,7 +777,9 @@ class Window(WindowEventSource, WindowSurface):
     def add_child(self, child_window):
         if child_window not in self.children:
             child_window.parent = self
-            child_window.position = child_window.position + self.position + [self.border_width/2, self.border_width/2]
+            child_window.position = child_window.position + self.position +\
+                                    [self.border_width/2, self.border_width/2] +\
+                                    [self.padding.left, self.padding.top]
             child_window.context = self.context
             self.children.append(child_window)
 
@@ -737,10 +811,17 @@ class Window(WindowEventSource, WindowSurface):
     @size.setter
     def size(self, size):
         size = Size.from_value(size)
+
         if size.height <= self.min_size.height:
             size.height = self.min_size.height
         if size.width <= self.min_size.width:
             size.width = self.min_size.width
+
+        if self.max_size.width > -1 and size.width >= self.max_size.width:
+            size.width = self.max_size.width
+        if self.max_size.height > -1 and size.height >= self.max_size.height:
+            size.height = self.max_size.height
+
         diff = size - self.rectangle.size
         if diff.height != 0 or diff.width != 0:
             self.dispatch('resize', self, size)
@@ -769,10 +850,20 @@ class Mouse(Window):
 
 
 class TextWindow(Window):
+
     def __init__(self, name, text, *args, **kwargs):
         super(TextWindow, self).__init__(name, *args, **kwargs)
+        self.font_size = kwargs.pop('font_size', 12)
+        self.font_style = kwargs.pop('font_style', 'normal')
+        self.font_weight = kwargs.pop('font_weight', 'normal')
+        self.font_family = kwargs.pop('font_family', 'Sans')
+        self.word_wrap = kwargs.pop('word_wrap', 'word')
+        self.font_color = Color.from_value(kwargs.pop('font_color', (0,0,0,1)))
         self.text = text
 
     def render(self):
         super(TextWindow, self).render()
-        self.draw_text(self.text, [0,0], self.size)
+        self.draw_text(self.text, [0,0],
+                       self.font_size, font_weight=self.font_weight,
+                       font_style=self.font_style, font_family=self.font_family,
+                       font_color=self.font_color, word_wrap=self.word_wrap)

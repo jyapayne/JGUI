@@ -7,6 +7,7 @@ class TestSurface(Surface):
         my_win = Window('child',
                         position=[0,0],
                         size=[500,200],
+                        max_size=[600, -1],
                         draggable=True,
                         resizable=True,
                         min_size=Size(40,40),
@@ -16,11 +17,11 @@ class TestSurface(Surface):
                         background_color=(1,1,1),
                         clip_children=True,
                         ignore_debug=True)
-        my_win.add_child(TextWindow('text','Micro Bean.', position=[20,20], size=[100, 50]))
+        my_win.add_child(TextWindow('text','Micro Bean is the best bean ever.', position=[20,20], size=[100, 50], resizable=True, clip_children=True, font_color=(1,0,1), padding=20, draggable=True))
         self.root_window.add_child(my_win)
         self.root_window.add_child(TestWindow('child2', position=[200,200], size=[200,200], draggable=True))
         child3 = TestWindow('child3', position=[300,300], size=[200,200], draggable=True)
-        child3.add_child(TestWindow('child3-1', position=[10,10], size=[50,50], draggable=True))
+        child3.add_child(TestWindow('child3-1', position=[10,10], size=[50,50], draggable=True, resizable=True))
         self.root_window.add_child(child3)
 
 
