@@ -1,5 +1,6 @@
 from jgui.surface import Surface, Window, Position, Size, Color, TextWindow, ImageWindow
-import math
+import math, os
+from jgui.settings import IMG_DIR
 
 class TestSurface(Surface):
     def __init__(self, *args, **kwargs):
@@ -17,7 +18,7 @@ class TestSurface(Surface):
                         background_color=(1,1,1),
                         clip_children=True,
                         ignore_debug=True,
-                        background_image='/home/joey/Pictures/wrench.png',
+                        background_image=os.path.join(IMG_DIR, 'wrench.png'),
                         background_image_filter='bilinear')
 
         my_win.add_child(TextWindow('text','Micro Bean is the best bean ever.',
@@ -30,7 +31,7 @@ class TestSurface(Surface):
         self.root_window.add_child(TestWindow('child2', position=[200,200],
                                               size=[200,200], draggable=True))
 
-        self.root_window.add_child(ImageWindow('image', image_path='/home/joey/Pictures/wrench.png',
+        self.root_window.add_child(ImageWindow('image', image_path=os.path.join(IMG_DIR, 'wrench.png'),
                                                position=[0,200], size=[200,200],
                                                draggable=True, resizable=True))
 
