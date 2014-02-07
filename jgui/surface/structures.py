@@ -63,10 +63,13 @@ class StructureBase(object):
 
     @classmethod
     def from_value(cls, value):
-        try:
-            return cls(*value)
-        except TypeError:
-            return cls()
+        if isinstance(value, cls):
+            return value
+        else:
+            try:
+                return cls(*value)
+            except TypeError:
+                return cls()
 
 class Position(StructureBase):
     def __init__(self, x=0, y=0):
@@ -87,8 +90,7 @@ class Position(StructureBase):
         raise Exception("Cannot multiply position by {}.".format(value.__class__.__name__))
 
     def __iter__(self):
-        yield self.x
-        yield self.y
+        return iter([self.x, self.y])
 
 
 class Size(StructureBase):
@@ -122,8 +124,7 @@ class Size(StructureBase):
         return self.width*self.height
 
     def __iter__(self):
-        yield self.width
-        yield self.height
+        return iter([self.width, self.height])
 
 
 class FourValueStructure(StructureBase):
@@ -146,7 +147,10 @@ class FourValueStructure(StructureBase):
 
     @classmethod
     def from_value(cls, value):
-        return cls(*cls._parse_value(value))
+        if isinstance(value, cls):
+            return value
+        else:
+            return cls(*cls._parse_value(value))
 
 
 class BorderRadius(FourValueStructure):
@@ -158,10 +162,7 @@ class BorderRadius(FourValueStructure):
         self.bottomleft = kwargs.get('bottomleft', values[3])
 
     def __iter__(self):
-        yield self.topleft
-        yield self.topright
-        yield self.bottomright
-        yield self.bottomleft
+        return iter([self.topleft, self.topright, self.bottomright, self.bottomleft])
 
 
 class Padding(FourValueStructure):
@@ -173,10 +174,7 @@ class Padding(FourValueStructure):
         self.left = kwargs.get('left', values[3])
 
     def __iter__(self):
-        yield self.top
-        yield self.right
-        yield self.bottom
-        yield self.left
+        return iter([self.top, self.right, self.bottom, self.left])
 
 
 class Color(StructureBase):
@@ -218,10 +216,7 @@ class Color(StructureBase):
         return self
 
     def __iter__(self):
-        yield self.r
-        yield self.g
-        yield self.b
-        yield self.a
+        return iter([self.r, self.g, self.b, self.a])
 
     @classmethod
     def hex_to_rgba(cls, hex_val):
@@ -244,6 +239,8 @@ class Color(StructureBase):
 
     @classmethod
     def from_value(cls, value):
+        if isinstance(value, cls):
+            return value
         try:
             return cls(*value)
         except TypeError:
@@ -272,8 +269,7 @@ class Rectangle(StructureBase):
         self._position = Position.from_value(position)
 
     def __iter__(self):
-        yield list(self.position)
-        yield list(self.size)
+        return iter([list(self.position), list(self.size)])
 
     @property
     def size(self):
@@ -292,16 +288,20 @@ class Rectangle(StructureBase):
 
     def intersection(self, other):
         other = Rectangle.from_value(other)
+        if self.contains(other):
+            return other
         if other.contains(self):
             return self
-        elif self.contains(other):
-            return other
-        if self.intersects_with(other.position):
-            return Rectangle(other.position, self.position + self.size - other.position)
-        elif other.intersects_with(self.position):
-            return Rectangle(self.position, other.position + other.size - self.position)
-        else:
+
+        newx = max(self.position.x, other.position.x)
+        newy = max(self.position.y, other.position.y)
+
+        new_width = min(self.position.x + self.size.width, other.position.x + other.size.width) - newx
+        new_height = min(self.position.y + self.size.height, other.position.y + other.size.height) - newy
+
+        if new_width <= 0 or new_height <= 0:
             return Rectangle()
+        return Rectangle([newx, newy], [new_width, new_height])
 
     def intersects_with(self, position):
         """Checks if the position is within the bounds of the rectangle including the edges"""

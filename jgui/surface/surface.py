@@ -285,6 +285,7 @@ class Window(WindowEventSource, WindowSurface):
         super(Window, self).__init__()
         self._draggable = False
         self._resizable = False
+        self._root = None
 
         self.name = name
 
@@ -638,6 +639,16 @@ class Window(WindowEventSource, WindowSurface):
     def hide(self):
         self.visible = False
 
+    def get_clip_parent(self):
+        parent = self.parent
+        l = []
+        while parent is not None:
+            if parent.clip_children:
+                l.append(parent)
+            parent = parent.parent
+        if l:
+            return l[-1]
+
     def inject_mouse_down(self, button):
         if self.mouse_inside():
             log(button, self.name)
@@ -706,34 +717,45 @@ class Window(WindowEventSource, WindowSurface):
                 self.mouse_inputs[key] = False
             self.dispatch('focus-lost', self)
 
-    def get_root(self):
-        parent = self.parent
-        if parent is None:
-            return self
+    @property
+    def root(self):
+        if self._root is None:
+            parent = self.parent
+            if parent is None:
+                return self
 
-        while parent is not None:
-            root = parent
-            parent = parent.parent
+            while parent is not None:
+                root = parent
+                parent = parent.parent
 
-        return root
+            self._root = root
+        return self._root
 
     def mouse_inside(self):
         """
         Checks if the mouse is inside the window taking into account
         all other windows and draw priorities.
         """
-        res = self.rectangle.intersects_with(self.mouse_pos)
+        rec = self.rectangle
+        clip_parent = self.get_clip_parent()
+        if clip_parent is not None:
+            rec = self.rectangle.intersection(clip_parent.rectangle)
+        res = rec.intersects_with(self.mouse_pos)
         if not res:
             return False
 
         #Check all children of root to see if there is a higher priority
         #window than the current one
-        root = self.get_root()
+        root = self.root
         stack = [root]
         visited = set()
         while stack:
             item = stack[-1]
-            intersects_mouse = item.rectangle.intersects_with(self.mouse_pos)
+            rec = item.rectangle
+            clip_parent = item.get_clip_parent()
+            if clip_parent is not None:
+                rec = item.rectangle.intersection(clip_parent.rectangle)
+            intersects_mouse = rec.intersects_with(self.mouse_pos)
             if item.children and not set(item.children).issubset(visited):
                 stack.extend(item.children)
             else:
@@ -748,7 +770,7 @@ class Window(WindowEventSource, WindowSurface):
 
     def mouse_held(self):
         res = self.mouse_down
-        stack = [self.get_root()]
+        stack = [self.root]
         visited = set()
         while len(stack) > 0:
             item = stack[-1]
