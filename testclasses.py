@@ -1,4 +1,4 @@
-from jgui.surface import Surface, Window, Position, Size, Color, TextWindow
+from jgui.surface import Surface, Window, Position, Size, Color, TextWindow, ImageWindow
 import math
 
 class TestSurface(Surface):
@@ -16,12 +16,30 @@ class TestSurface(Surface):
                         border_color=(0,0,0),
                         background_color=(1,1,1),
                         clip_children=True,
-                        ignore_debug=True)
-        my_win.add_child(TextWindow('text','Micro Bean is the best bean ever.', position=[20,20], size=[100, 50], resizable=True, clip_children=True, font_color=(1,0,1), padding=20, draggable=True))
+                        ignore_debug=True,
+                        background_image='/home/joey/Pictures/wrench.png',
+                        background_image_filter='bilinear')
+
+        my_win.add_child(TextWindow('text','Micro Bean is the best bean ever.',
+                                    position=[20,20], size=[100, 50],
+                                    resizable=True, clip_children=True,
+                                    font_color=(1,0,1), padding=20,
+                                    draggable=True))
+
         self.root_window.add_child(my_win)
-        self.root_window.add_child(TestWindow('child2', position=[200,200], size=[200,200], draggable=True))
-        child3 = TestWindow('child3', position=[300,300], size=[200,200], draggable=True)
-        child3.add_child(TestWindow('child3-1', position=[10,10], size=[50,50], draggable=True, resizable=True))
+        self.root_window.add_child(TestWindow('child2', position=[200,200],
+                                              size=[200,200], draggable=True))
+
+        self.root_window.add_child(ImageWindow('image', image_path='/home/joey/Pictures/wrench.png',
+                                               position=[0,200], size=[200,200],
+                                               draggable=True, resizable=True))
+
+        child3 = TestWindow('child3', position=[300,300],
+                            size=[200,200], draggable=True)
+        child3.add_child(TestWindow('child3-1', position=[10,10],
+                                    size=[50,50], draggable=True,
+                                    resizable=True))
+
         self.root_window.add_child(child3)
 
 

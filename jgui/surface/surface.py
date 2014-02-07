@@ -1,6 +1,7 @@
 import cairo
 import pango
 import pangocairo as pc
+import gtk
 import math
 from .structures import Size, Position, Rectangle, Color, BorderRadius, Padding
 from ..events.events import WindowEventSource
@@ -97,8 +98,22 @@ class WindowSurface(object):
     font_map = pc.cairo_font_map_get_default()
     font_list = [f.get_name() for f in font_map.list_families()]
 
+    filters = {'none': cairo.FILTER_FAST,
+               'good': cairo.FILTER_GOOD,
+               'best': cairo.FILTER_BEST,
+               'bilinear': cairo.FILTER_BILINEAR,
+               'gaussian': cairo.FILTER_GAUSSIAN,
+               'nearest' : cairo.FILTER_NEAREST}
+
     def __init__(self):
         super(WindowSurface, self).__init__()
+
+    def load_image(self, image_path):
+        if image_path is not None:
+            if isinstance(image_path, basestring):
+                return gtk.gdk.pixbuf_new_from_file(image_path)
+            else:
+                return image_path
 
     def draw_circle(self, position, size, color=(1,1,1,1), line_width=1.0, line_color=(0,0,0,1), start_angle=0.0, end_angle=360.0):
         color = Color.from_value(color)
@@ -124,6 +139,69 @@ class WindowSurface(object):
         context.fill_preserve()
         context.set_source_rgba(*line_color)
         context.stroke()
+
+    def draw_image(self, image, position, size,
+                   filter='none', stretch=True,
+                   keep_aspect=True, center_horizontal=True,
+                   center_vertical=True, image_offset=(0, 0)):
+
+        context = self.context
+        position = Position.from_value(position)
+        offset = Position.from_value(image_offset)
+        size = Size.from_value(size)
+        width = size.width
+        height = size.height
+
+        x,y = (self.position.x+position.x,
+               self.position.y+position.y)
+
+        context.rectangle(x, y, width, height)
+        context.clip()
+
+        if isinstance(image, basestring):
+            image = self.load_image(image)
+
+        im_width = image.get_width()
+        im_height = image.get_height()
+
+        new_height = height
+        new_width = width
+
+        if keep_aspect:
+            aspect_ratio = min(im_width, im_height)/float(max(im_width, im_height))
+            if width >= height:
+                new_width = aspect_ratio * new_height
+            else:
+                new_height = aspect_ratio * new_width
+
+        if center_horizontal:
+            x += width/2.0 - new_width/2.0
+            if x < 0:
+                x = 0
+        if center_vertical:
+            y += height/2.0 - new_height/2.0
+            if y < 0:
+                y = 0
+
+        im_surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(new_width), int(new_height))
+
+        sp = cairo.SurfacePattern(im_surf)
+
+        ct2 = cairo.Context(im_surf)
+        ct2.set_source(sp)
+
+        ct3 = gtk.gdk.CairoContext(ct2)
+
+        if stretch:
+            ct3.scale(new_width/float(im_width), new_height/float(im_height))
+
+        ct3.set_source_pixbuf(image, -offset.x, -offset.y)
+        ct3.get_source().set_filter(self.filters[filter])
+        ct3.paint()
+
+        context.set_source_surface(im_surf,x,y)
+        context.paint()
+
 
     def draw_text(self, text, position, font_size=12,
                   font_weight='normal',
@@ -300,6 +378,14 @@ class Window(WindowEventSource, WindowSurface):
         self.border_width = kwargs.pop('border_width', 1)
         self.border_color = Color.from_value(kwargs.pop('border_color', (0,0,0,0)))
         self.background_color = Color.from_value(kwargs.pop('background_color', (0,0,0,0)))
+        self.background_image = self.load_image(kwargs.pop('background_image', None))
+        self.background_image_filter = kwargs.pop('background_image_filter','none')
+        self.background_image_stretch = kwargs.pop('background_image_stretch', True)
+        self.background_image_keep_ratio = kwargs.pop('background_image_keep_ratio', True)
+        self.background_image_center_horizontal = kwargs.pop('background_image_center_horizontal', True)
+        self.background_image_center_vertical = kwargs.pop('background_image_center_vertical', True)
+        self.background_image_offset = Position.from_value(kwargs.pop('background_image_offset', (0, 0)))
+
         self.border_radius = BorderRadius.from_value(kwargs.pop('border_radius', 1))
         self.padding = Padding.from_value(kwargs.pop('padding', 0))
         self.dashed_border = kwargs.pop('dashed_border', False)
@@ -336,6 +422,15 @@ class Window(WindowEventSource, WindowSurface):
                                corner_radius=self.border_radius,
                                line_dashed=self.dashed_border,
                                clip=self.clip_children)
+
+        if self.background_image is not None:
+            self.draw_image(self.background_image, [0, 0], self.size,
+                            filter=self.background_image_filter,
+                            stretch=self.background_image_stretch,
+                            keep_aspect=self.background_image_keep_ratio,
+                            center_horizontal=self.background_image_center_horizontal,
+                            center_vertical=self.background_image_center_vertical,
+                            image_offset=self.background_image_offset)
 
     @property
     def resizable(self):
@@ -901,3 +996,14 @@ class TextWindow(Window):
                        self.font_size, font_weight=self.font_weight,
                        font_style=self.font_style, font_family=self.font_family,
                        font_color=self.font_color, word_wrap=self.word_wrap)
+
+class ImageWindow(Window):
+    def __init__(self, name, image_path, *args, **kwargs):
+        super(ImageWindow, self).__init__(name, *args, **kwargs)
+        self.image_path = image_path
+        self.image = self.load_image(self.image_path)
+
+    def render(self):
+        self.draw_image(self.image, [0,0], self.size)
+        super(ImageWindow, self).render()
+
