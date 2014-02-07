@@ -28,3 +28,8 @@ After that, you should be able to run
 or
 
     python gtktest.py
+    
+Screenshots
+-----------
+
+![ScreenShot](https://raw.github.com/jyapayne/JGUI/master/screenshots/Multiple_windows_with_subwindows_and_background_images.png)
