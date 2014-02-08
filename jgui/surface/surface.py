@@ -176,12 +176,12 @@ class WindowSurface(object):
 
         if center_horizontal:
             x += width/2.0 - new_width/2.0
-            if x < 0:
-                x = 0
+            if x < self.position.x:
+                x = self.position.x
         if center_vertical:
             y += height/2.0 - new_height/2.0
-            if y < 0:
-                y = 0
+            if y < self.position.y:
+                y = self.position.y
 
         im_surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(new_width), int(new_height))
 
