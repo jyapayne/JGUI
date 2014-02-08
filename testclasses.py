@@ -28,20 +28,20 @@ class TestSurface(Surface):
                                     draggable=True))
 
         self.root_window.add_child(my_win)
-        self.root_window.add_child(TestWindow('child2', position=[200,200],
-                                              size=[200,200], draggable=True))
+        #self.root_window.add_child(TestWindow('child2', position=[200,200],
+        #                                      size=[200,200], draggable=True))
 
         self.root_window.add_child(ImageWindow('image', image_path=os.path.join(IMG_DIR, 'wrench.png'),
                                                position=[0,200], size=[200,200],
                                                draggable=True, resizable=True))
 
-        child3 = TestWindow('child3', position=[300,300],
-                            size=[200,200], draggable=True)
-        child3.add_child(TestWindow('child3-1', position=[10,10],
-                                    size=[50,50], draggable=True,
-                                    resizable=True))
+        #child3 = TestWindow('child3', position=[300,300],
+        #                    size=[200,200], draggable=True)
+        #child3.add_child(TestWindow('child3-1', position=[10,10],
+        #                            size=[50,50], draggable=True,
+        #                            resizable=True))
 
-        self.root_window.add_child(child3)
+        #self.root_window.add_child(child3)
 
 
 class TestWindow(Window):

@@ -27,7 +27,6 @@ class Test(ShowBase):
         c.setHasUvs(True)
         screen = render2d.attachNewNode(c.generate())
         screen.setTransparency(TransparencyAttrib.MAlpha)
-        screen.setTwoSided(True)
 
         self.surf = TestSurface([width, height])
 
