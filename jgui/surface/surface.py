@@ -3,7 +3,7 @@ import pango
 import pangocairo as pc
 import gtk
 import math
-from .structures import Size, Position, Rectangle, Color, BorderRadius, Padding
+from .structures import Size, Position, Rectangle, Color, BorderRadius, Padding, Gradient, RadialGradient
 from ..events.events import WindowEventSource
 from ..logger import log
 
@@ -135,14 +135,17 @@ class WindowSurface(object):
         context.arc(0, 0, 1, start_angle, end_angle * math.pi/180.0)
         context.restore()
 
-        context.set_source_rgba(*color)
+        context.set_source_rgba(color.r, color.g, color.b, color.a)
         context.fill_preserve()
-        context.set_source_rgba(*line_color)
+        context.set_source_rgba(line_color.r, line_color.g, line_color.b, line_color.a)
         context.stroke()
 
     def draw_image(self, image, position, size,
-                   filter='none', stretch=True,
-                   keep_aspect=True, center_horizontal=True,
+                   filter='none',
+                   stretch_horizontal=False,
+                   stretch_vertical=False,
+                   keep_ratio=False,
+                   center_horizontal=True,
                    center_vertical=True, image_offset=(0, 0)):
 
         context = self.context
@@ -167,12 +170,18 @@ class WindowSurface(object):
         new_height = height
         new_width = width
 
-        if keep_aspect:
-            aspect_ratio = min(im_width, im_height)/float(max(im_width, im_height))
+        if keep_ratio:
+            aspect_ratio = im_width/float(im_height)
             if width >= height:
-                new_width = aspect_ratio * new_height
+                if im_height < im_width:
+                    new_height = width/aspect_ratio
+                else:
+                    new_width = aspect_ratio * height
             else:
-                new_height = aspect_ratio * new_width
+                if im_height > im_width:
+                    new_width = aspect_ratio * height
+                else:
+                    new_height = width/aspect_ratio
 
         if center_horizontal:
             x += width/2.0 - new_width/2.0
@@ -192,8 +201,15 @@ class WindowSurface(object):
 
         ct3 = gtk.gdk.CairoContext(ct2)
 
-        if stretch:
-            ct3.scale(new_width/float(im_width), new_height/float(im_height))
+        new_scale_x = 1
+        new_scale_y = 1
+
+        if stretch_horizontal or keep_ratio:
+            new_scale_x = new_width/float(im_width)
+        if stretch_vertical or keep_ratio:
+            new_scale_y = new_height/float(im_height)
+
+        ct3.scale(new_scale_x, new_scale_y)
 
         ct3.set_source_pixbuf(image, -offset.x, -offset.y)
         ct3.get_source().set_filter(self.filters[filter])
@@ -232,9 +248,7 @@ class WindowSurface(object):
         layout.set_alignment(alignment)
 
         context.set_line_width(line_width)
-        context.set_source_rgba(*font_color)
-        #context.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-        #context.set_font_size(size.height)
+        context.set_source_rgba(font_color.r, font_color.g, font_color.b, font_color.a)
 
         extents = context.text_extents(text)
 
@@ -244,7 +258,6 @@ class WindowSurface(object):
         context.move_to(x, y)
         pc_context.update_layout(layout)
         pc_context.show_layout(layout)
-        #context.show_text(text)
 
 
     def draw_lines(self, lines, line_color=(0,0,0,1), background_color=(1,1,1,1), line_width=1, line_join='miter', line_cap='butt'):
@@ -267,18 +280,56 @@ class WindowSurface(object):
                 context.set_line_join(self.line_caps[line_cap])
             except KeyError:
                 pass
-            context.set_source_rgba(*background_color)
+            context.set_source_rgba(background_color.r, background_color.g, background_color.b, background_color.a)
             context.fill_preserve()
-            context.set_source_rgba(*line_color)
+            context.set_source_rgba(line_color.r, line_color.g, line_color.b, line_color.a)
             context.stroke()
 
+    def render_radial_gradient(self, gradient, inner_radius=None, outer_radius=None):
+        context = self.context
+        position = self.position
+        size = self.size
+        gradient = RadialGradient.from_value(gradient)
+        rp = cairo.RadialGradient(gradient.start_position.x*float(size.width) + position.x,
+                                  gradient.start_position.y*float(size.height) + position.y,
+                                  inner_radius or gradient.inner_radius,
+                                  gradient.end_position.x*float(size.width) + position.x,
+                                  gradient.end_position.y*float(size.height) + position.y,
+                                  outer_radius or gradient.outer_radius)
+        for gstop in gradient.stops:
+            rp.add_color_stop_rgba(gstop.offset, gstop.color.r, gstop.color.g,
+                                   gstop.color.b, gstop.color.a)
+        if gradient.stops:
+            context.save()
+            context.set_source(rp)
+            context.fill_preserve()
+            context.restore()
 
-    def draw_rounded_rect(self, position, size, background_color=(1,1,1), line_width=1, line_color=(0,0,0), corner_radius=0, line_dashed=False, clip=False):
+    def render_linear_gradient(self, gradient):
+        context = self.context
+        position = self.position
+        size = self.size
+        gradient = Gradient.from_value(gradient)
+        lp = cairo.LinearGradient(gradient.start_position.x*float(size.width) + position.x,
+                                  gradient.start_position.y*float(size.height) + position.y,
+                                  gradient.end_position.x*float(size.width) + position.x,
+                                  gradient.end_position.y*float(size.height) + position.y)
+        for gstop in gradient.stops:
+            lp.add_color_stop_rgba(gstop.offset, gstop.color.r, gstop.color.g,
+                                   gstop.color.b, gstop.color.a)
+        if gradient.stops:
+            context.save()
+            context.set_source(lp)
+            context.fill_preserve()
+            context.restore()
+
+    def draw_rounded_rect(self, position, size, background_color=(1,1,1), line_width=1, line_color=(0,0,0), corner_radius=0, line_dashed=False, clip=False, gradient=()):
         position = Position.from_value(position)
         size = Size.from_value(size)
         background_color = Color.from_value(background_color)
         line_color = Color.from_value(line_color)
         corner_radius = BorderRadius.from_value(corner_radius)
+        gradient = Gradient.from_value(gradient)
 
         context = self.context
         radius = corner_radius
@@ -287,7 +338,9 @@ class WindowSurface(object):
         y = position.y + self.position.y
         width = size.width
         height = size.height
+
         if clip: #clips the entire region so any child windows will be confined to the parent
+            context.new_path()
             context.arc(x + width - radius.topright - line_width/2.0,
                         y + radius.topright + line_width/2.0,
                         radius.topright+self.border_width/2.0, -90 * degrees, 0 * degrees)
@@ -318,9 +371,18 @@ class WindowSurface(object):
                     radius.topleft, 180 * degrees, 270 * degrees)
         context.close_path()
 
-        context.set_source_rgba(*background_color)
+        if gradient.stops:
+            if gradient._type == 'linear':
+                self.render_linear_gradient(gradient)
+            elif gradient._type == 'radial':
+                self.render_radial_gradient(gradient)
+            else:
+                context.set_source_rgba(background_color.r, background_color.g, background_color.b, background_color.a)
+        else:
+            context.set_source_rgba(background_color.r, background_color.g, background_color.b, background_color.a)
+
         context.fill_preserve()
-        context.set_source_rgba(*line_color)
+        context.set_source_rgba(line_color.r, line_color.g, line_color.b, line_color.a)
         context.set_line_width(line_width)
         context.save()
         if line_dashed:
@@ -329,6 +391,7 @@ class WindowSurface(object):
         context.restore()
 
         if clip: #clips the entire region so any child windows will be confined to the parent
+            context.new_path()
             context.arc(x + width - radius.topright - line_width/2.0,
                         y + radius.topright + line_width/2.0,
                         radius.topright-self.border_width/2.0, -90 * degrees, 0 * degrees)
@@ -380,11 +443,14 @@ class Window(WindowEventSource, WindowSurface):
         self.background_color = Color.from_value(kwargs.pop('background_color', (0,0,0,0)))
         self.background_image = self.load_image(kwargs.pop('background_image', None))
         self.background_image_filter = kwargs.pop('background_image_filter','none')
-        self.background_image_stretch = kwargs.pop('background_image_stretch', True)
-        self.background_image_keep_ratio = kwargs.pop('background_image_keep_ratio', True)
+        self.background_image_stretch_horizontal = kwargs.pop('background_image_stretch_horizontal', False)
+        self.background_image_stretch_vertical = kwargs.pop('background_image_stretch_vertical', False)
+        self.background_image_keep_ratio = kwargs.pop('background_image_keep_ratio', False)
         self.background_image_center_horizontal = kwargs.pop('background_image_center_horizontal', True)
         self.background_image_center_vertical = kwargs.pop('background_image_center_vertical', True)
         self.background_image_offset = Position.from_value(kwargs.pop('background_image_offset', (0, 0)))
+
+        self.gradient = Gradient.from_value(kwargs.pop('gradient', ()))
 
         self.border_radius = BorderRadius.from_value(kwargs.pop('border_radius', 1))
         self.padding = Padding.from_value(kwargs.pop('padding', 0))
@@ -421,13 +487,14 @@ class Window(WindowEventSource, WindowSurface):
                                line_width=self.border_width,
                                corner_radius=self.border_radius,
                                line_dashed=self.dashed_border,
-                               clip=self.clip_children)
+                               clip=self.clip_children, gradient=self.gradient)
 
         if self.background_image is not None:
             self.draw_image(self.background_image, [0, 0], self.size,
                             filter=self.background_image_filter,
-                            stretch=self.background_image_stretch,
-                            keep_aspect=self.background_image_keep_ratio,
+                            stretch_horizontal=self.background_image_stretch_horizontal,
+                            stretch_vertical=self.background_image_stretch_vertical,
+                            keep_ratio=self.background_image_keep_ratio,
                             center_horizontal=self.background_image_center_horizontal,
                             center_vertical=self.background_image_center_vertical,
                             image_offset=self.background_image_offset)
@@ -463,23 +530,32 @@ class Window(WindowEventSource, WindowSurface):
             self.reject('mouse-left', self.click)
             self.reject('mouse-left-up', self.click_up)
 
-    def _restrict_pos_size(self, new_pos, new_size):
+    def _restrict_pos_size_height(self, new_pos, new_size):
         if new_size.height <= self.min_size.height:
             new_pos.y = self.position.y + self.size.height - self.min_size.height
             new_size.height = self.min_size.height
-
-        if new_size.width <= self.min_size.width:
-            new_pos.x = self.position.x + self.size.width - self.min_size.width
-            new_size.width = self.min_size.width
 
         if self.max_size.height > -1 and new_size.height >= self.max_size.height:
             new_pos.y = self.position.y + self.size.height - self.max_size.height
             new_size.height = self.max_size.height
 
+        return new_pos, new_size
+
+    def _restrict_pos_size_width(self, new_pos, new_size):
+
+        if new_size.width <= self.min_size.width:
+            new_pos.x = self.position.x + self.size.width - self.min_size.width
+            new_size.width = self.min_size.width
+
         if self.max_size.width > -1 and new_size.width >= self.max_size.width:
             new_pos.x = self.position.x + self.size.width - self.max_size.width
             new_size.width = self.max_size.width
 
+        return new_pos, new_size
+
+    def _restrict_pos_size(self, new_pos, new_size):
+        self._restrict_pos_size_height(new_pos, new_size)
+        self._restrict_pos_size_width(new_pos, new_size)
         return new_pos, new_size
 
     def drag_bottomright_handle(self, obj, mouse_pos):
@@ -495,7 +571,7 @@ class Window(WindowEventSource, WindowSurface):
         new_pos = Position(self.position.x + diff.x, self.position.y)
         new_size = Size(self.size.width - diff.x, self.size.height + diff.y)
 
-        new_pos, new_size = self._restrict_pos_size(new_pos, new_size)
+        new_pos, new_size = self._restrict_pos_size_width(new_pos, new_size)
 
         if self.draggable:
             self.position = new_pos
@@ -512,7 +588,7 @@ class Window(WindowEventSource, WindowSurface):
         new_pos = Position(self.position.x, self.position.y + diff.y)
         new_size = Size(self.size.width + diff.x, self.size.height - diff.y)
 
-        new_pos, new_size = self._restrict_pos_size(new_pos, new_size)
+        new_pos, new_size = self._restrict_pos_size_height(new_pos, new_size)
 
         if self.draggable:
             self.position = new_pos

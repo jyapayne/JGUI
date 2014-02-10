@@ -224,7 +224,12 @@ class Color(StructureBase):
         if isinstance(hex_val, (long, int)):
             hexstring = "{0:x}".format(abs(hex_val))
         elif isinstance(hex_val, basestring):
-            hexstring = hexval[2:]
+            if hex_val.startswith('0x'):
+                hexstring = hex_val[2:]
+            elif hex_val.startswith('#'):
+                hexstring = hex_val[1:]
+            else:
+                hexstring = hex_val
         else:
             return None
         if len(hexstring) % 2 != 0:
@@ -233,7 +238,7 @@ class Color(StructureBase):
             return None
         ba = []
         for i in xrange(0, len(hexstring), 2):
-            ba.append(int(hexstring[i:i+2], 16))
+            ba.append(int(hexstring[i:i+2], 16)/255.0)
         c = cls(*ba)
         return c
 
@@ -248,6 +253,40 @@ class Color(StructureBase):
             if c is not None:
                 return c
             return cls()
+
+
+class GradientStop(StructureBase):
+    def __init__(self, offset=0, color=(1,1,1,1)):
+        if offset > 1.0 or offset < 0:
+            raise Exception('Offset must be between 0 and 1.')
+        self.offset = offset
+        self.color = Color.from_value(color)
+
+
+class Gradient(StructureBase):
+    def __init__(self, start_position=(0,0), end_position=(0,1), stops=()):
+        self._type = 'linear'
+        self.stops = self.get_stops(stops)
+        self.start_position = Position.from_value(start_position)
+        self.end_position = Position.from_value(end_position)
+
+    def get_stops(self, stops):
+        gstops = []
+        for g_stop in stops:
+            gstops.append(GradientStop.from_value(g_stop))
+        return gstops
+
+    def add_stop(self, offset_pos, color):
+        self.stops.append(GradientStop.from_value((offset_pos, color)))
+
+
+class RadialGradient(Gradient):
+    def __init__(self, inner_radius=0, outer_radius=1, *args, **kwargs):
+        super(RadialGradient, self).__init__(*args, **kwargs)
+        self._type = 'radial'
+        self.inner_radius = inner_radius
+        self.outer_radius = outer_radius
+
 
 class Rectangle(StructureBase):
     def __init__(self, position=None, size=None):
