@@ -6,22 +6,41 @@ import math
 from .structures import Size, Position, Rectangle, Color, BorderRadius, Padding, Gradient, RadialGradient
 from ..events.events import WindowEventSource
 from ..logger import log
+from datetime import datetime
+from jgui.settings import DEBUG as debug
 
-debug = True
 
-class Surface(object):
-    def __init__(self, size=None, context=None, render_mouse=True):
+class Surface(WindowEventSource):
+    def __init__(self, size=None, context=None, data=None, render_mouse=True, show_fps=False):
+        super(Surface, self).__init__()
+        self.show_fps = show_fps
         self.size = Size.from_value(size)
+        self.mouse_pos = Position()
         if context is None:
-            self.csurface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.size.width, self.size.height)
+            if data is not None:
+                self.csurface = cairo.ImageSurface.create_for_data(data, cairo.FORMAT_ARGB32, self.size.width, self.size.height)
+            else:
+                self.csurface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.size.width, self.size.height)
             self.context = cairo.Context(self.csurface)
         else:
             self.context = context
-        self.root_window = Window('root', position=Position(0,0), size=self.size, context=self.context)
+        self.root_window = Window('root', position=Position(0,0), size=self.size, context=self.context, surface=self)
         self.render_mouse = render_mouse
         if self.render_mouse:
-            self.mouse_icon = Mouse('mouse', position=Position(0, 0), size=Size(12,20), context=self.context)
-        self.windows = [self.root_window, self.mouse_icon]
+            self.mouse_icon = Mouse('mouse', position=Position(0, 0), size=Size(12,20), context=self.context, surface=self)
+        self.fps_counter = TextWindow('fps', '0 fps', position=Position(self.size.width-70, 10), size=Size(80,20), context=self.context, surface=self)
+        self.windows = [self.root_window, self.mouse_icon, self.fps_counter]
+
+        self.current_hover_window = self.root_window
+        self.current_focused_window = self.root_window
+
+        self.dt = 0
+        self.old_time = datetime.now()
+        self.dtindex = 0
+        self.max_samples = 60
+        self.dtlist = range(self.max_samples)
+
+        self.accept('mouse-move', self.process_mouse_move)
 
     def setTopZero(self, context):
         context.identity_matrix()
@@ -29,16 +48,56 @@ class Surface(object):
                               1, 0, 0)
         context.transform(matrix)
 
-    def inject_mouse_position(self, pos):
-        if self.render_mouse:
-            self.mouse_icon.position = pos
-        self.root_window.inject_mouse_position(pos)
-
     def inject_mouse_down(self, button):
+        self.current_focused_window = self.current_hover_window
         self.root_window.inject_mouse_down(button)
 
     def inject_mouse_up(self, button):
         self.root_window.inject_mouse_up(button)
+
+    def inject_mouse_position(self, pos):
+        mouse_pos = Position.from_value(pos)
+        diff = mouse_pos - self.mouse_pos
+        old_pos = self.mouse_pos
+        self.mouse_pos = mouse_pos
+        if diff != Position(0,0):
+            self.dispatch('mouse-move', self, old_pos, self.mouse_pos)
+
+        if self.render_mouse:
+            self.mouse_icon.position = pos
+        self.root_window.inject_mouse_position(pos)
+
+    def mouse_inside(self):
+        """
+        Checks if the mouse is inside the window taking into account
+        all other windows and draw priorities.
+        """
+
+        #Check all children of root to see if there is a higher priority
+        #window than the current one
+        root = self.root_window
+        stack = [root]
+        visited = set()
+        while stack:
+            item = stack[-1]
+            rec = item.rectangle
+            clip_parent = item.get_clip_parent()
+            if clip_parent is not None:
+                rec = item.rectangle.intersection(clip_parent.rectangle)
+            intersects_mouse = rec.intersects_with(self.mouse_pos)
+            if item.children and not set(item.children).issubset(visited):
+                stack.extend(item.children)
+            else:
+                if intersects_mouse:
+                    return item
+                visited.add(item)
+                stack.pop()
+
+        return None
+
+    def process_mouse_move(self, obj, old_mpos, new_mpos):
+        if not self.current_hover_window or not self.current_hover_window.mouse_down:
+            self.current_hover_window = self.mouse_inside()
 
     def notify_window_resize(self, width, height):
         self.size = Size(width, height)
@@ -53,16 +112,27 @@ class Surface(object):
             if item.children:
                 stack.extend(item.children)
 
+    def calcfps(self, dt):
+        self.dtlist[self.dtindex] = float(dt)
+        self.dtindex += 1
+        if self.dtindex >= self.max_samples:
+            self.dtindex = 0
+
+        return 1.0/(sum(self.dtlist)/float(self.max_samples))
+
     def draw(self):
-        #self.setTopZero(ctx)
-        #self.context.identity_matrix()
+        if self.show_fps:
+            self.dt = (datetime.now() - self.old_time).total_seconds()
+            self.old_time = datetime.now()
+            fps = self.calcfps(self.dt)
+            self.fps_counter.text = '{} fps'.format(round(fps))
+
         self.context.set_operator(cairo.OPERATOR_CLEAR)
         self.context.rectangle(0.0, 0.0, self.size.width, self.size.height)
         self.context.fill()
         self.context.set_operator(cairo.OPERATOR_OVER)
         for window in self.windows:
             window.draw()
-
 
 
 class WindowSurface(object):
@@ -118,7 +188,7 @@ class WindowSurface(object):
     def draw_circle(self, position, size, color=(1,1,1,1), line_width=1.0, line_color=(0,0,0,1), start_angle=0.0, end_angle=360.0):
         color = Color.from_value(color)
         line_color = Color.from_value(line_color)
-        context = self.context
+        context = self.surface.context
         position = Position.from_value(position)
         size = Size.from_value(size)
         width = size.width
@@ -148,7 +218,7 @@ class WindowSurface(object):
                    center_horizontal=True,
                    center_vertical=True, image_offset=(0, 0)):
 
-        context = self.context
+        context = self.surface.context
         position = Position.from_value(position)
         offset = Position.from_value(image_offset)
         size = Size.from_value(size)
@@ -157,9 +227,6 @@ class WindowSurface(object):
 
         x,y = (self.position.x+position.x,
                self.position.y+position.y)
-
-        context.rectangle(x, y, width, height)
-        context.clip()
 
         if isinstance(image, basestring):
             image = self.load_image(image)
@@ -229,7 +296,7 @@ class WindowSurface(object):
         color = Color.from_value(font_color)
         background_color = Color.from_value(background_color)
         position = Position.from_value(position)
-        context = self.context
+        context = self.surface.context
         font_weight = self.font_weights[font_weight]
         font_style = self.font_styles[font_style]
 
@@ -264,7 +331,7 @@ class WindowSurface(object):
         if lines:
             line_color = Color.from_value(line_color)
             background_color = Color.from_value(background_color)
-            context = self.context
+            context = self.surface.context
             start_pos = self.position + lines[0]
             context.set_line_width(line_width)
             context.move_to(start_pos.x, start_pos.y)
@@ -286,7 +353,7 @@ class WindowSurface(object):
             context.stroke()
 
     def render_radial_gradient(self, gradient, inner_radius=None, outer_radius=None):
-        context = self.context
+        context = self.surface.context
         position = self.position
         size = self.size
         gradient = RadialGradient.from_value(gradient)
@@ -306,7 +373,7 @@ class WindowSurface(object):
             context.restore()
 
     def render_linear_gradient(self, gradient):
-        context = self.context
+        context = self.surface.context
         position = self.position
         size = self.size
         gradient = Gradient.from_value(gradient)
@@ -331,7 +398,7 @@ class WindowSurface(object):
         corner_radius = BorderRadius.from_value(corner_radius)
         gradient = Gradient.from_value(gradient)
 
-        context = self.context
+        context = self.surface.context
         radius = corner_radius
         degrees = math.pi / 180.0
         x = position.x + self.position.x
@@ -341,19 +408,7 @@ class WindowSurface(object):
 
         if clip: #clips the entire region so any child windows will be confined to the parent
             context.new_path()
-            context.arc(x + width - radius.topright - line_width/2.0,
-                        y + radius.topright + line_width/2.0,
-                        radius.topright+self.border_width/2.0, -90 * degrees, 0 * degrees)
-            context.arc(x + width - radius.bottomright - line_width/2.0,
-                        y + height - radius.bottomright - line_width/2.0,
-                        radius.bottomright+self.border_width/2.0, 0 * degrees, 90 * degrees)
-            context.arc(x + radius.bottomleft + line_width/2.0,
-                        y + height - radius.bottomleft - line_width/2.0,
-                        radius.bottomleft+self.border_width/2.0, 90 * degrees, 180 * degrees)
-            context.arc(x + radius.topleft + line_width/2.0,
-                        y + radius.topleft + line_width/2.0,
-                        radius.topleft+self.border_width/2.0, 180 * degrees, 270 * degrees)
-            context.close_path()
+            context.rectangle(x, y, width, height)
             context.clip()
 
         context.new_path()
@@ -414,11 +469,11 @@ class WindowSurface(object):
 
     def draw(self):
         if self.visible:
-            self.context.save()
+            self.surface.context.save()
             self.render()
             for child in self.children:
                 child.draw()
-            self.context.restore()
+            self.surface.context.restore()
 
 
 class Window(WindowEventSource, WindowSurface):
@@ -432,7 +487,7 @@ class Window(WindowEventSource, WindowSurface):
 
         position = Position.from_value(kwargs.pop('position', Position()))
         size = Size.from_value(kwargs.pop('size', Size()))
-        self._context = kwargs.pop('context', None)
+        self._surface = kwargs.pop('surface', None)
         self.min_size = Size.from_value(kwargs.pop('min_size', Size(1,1)))
         self.max_size = Size.from_value(kwargs.pop('max_size', Size(-1,-1)))
         self.corner_handle_size = Size.from_value(kwargs.pop('corner_handle_size', Size(20, 20)))
@@ -472,7 +527,7 @@ class Window(WindowEventSource, WindowSurface):
         self.accept('mouse-move', self.process_mouse_move)
         self.size = size
         self.position = position
-        self.context = self._context
+        self.surface = self._surface
         self.resizable = kwargs.pop('resizable', self._resizable)
         self.draggable = kwargs.pop('draggable', self._draggable)
 
@@ -903,56 +958,10 @@ class Window(WindowEventSource, WindowSurface):
         return self._root
 
     def mouse_inside(self):
-        """
-        Checks if the mouse is inside the window taking into account
-        all other windows and draw priorities.
-        """
-        rec = self.rectangle
-        clip_parent = self.get_clip_parent()
-        if clip_parent is not None:
-            rec = self.rectangle.intersection(clip_parent.rectangle)
-        res = rec.intersects_with(self.mouse_pos)
-        if not res:
-            return False
-
-        #Check all children of root to see if there is a higher priority
-        #window than the current one
-        root = self.root
-        stack = [root]
-        visited = set()
-        while stack:
-            item = stack[-1]
-            rec = item.rectangle
-            clip_parent = item.get_clip_parent()
-            if clip_parent is not None:
-                rec = item.rectangle.intersection(clip_parent.rectangle)
-            intersects_mouse = rec.intersects_with(self.mouse_pos)
-            if item.children and not set(item.children).issubset(visited):
-                stack.extend(item.children)
-            else:
-                if item is self:
-                    break
-                else:
-                    res &= not intersects_mouse
-                    visited.add(item)
-                    stack.pop()
-
-        return res
+        return self is self.surface.current_hover_window
 
     def mouse_held(self):
-        res = self.mouse_down
-        stack = [self.root]
-        visited = set()
-        while len(stack) > 0:
-            item = stack[-1]
-            if item.children and not set(item.children).issubset(visited):
-                stack.extend(item.children)
-            else:
-                if self is not item:
-                    res |= item.mouse_down
-                visited.add(item)
-                stack.pop()
-        return res
+        return self.mouse_down
 
     def process_mouse_move(self, obj, old_mpos, new_mpos):
         mouse_focus = self.mouse_inside()
@@ -970,14 +979,14 @@ class Window(WindowEventSource, WindowSurface):
                 self.mouse_in = False
 
     @property
-    def context(self):
-        return self._context
+    def surface(self):
+        return self._surface
 
-    @context.setter
-    def context(self, context):
-        self._context = context
+    @surface.setter
+    def surface(self, surface):
+        self._surface = surface
         for child in self.children:
-            child.context = self._context
+            child.surface = self._surface
 
     def add_child(self, child_window):
         if child_window not in self.children:
@@ -985,7 +994,7 @@ class Window(WindowEventSource, WindowSurface):
             child_window.position = child_window.position + self.position +\
                                     [self.border_width/2, self.border_width/2] +\
                                     [self.padding.left, self.padding.top]
-            child_window.context = self.context
+            child_window.surface = self.surface
             self.children.append(child_window)
 
     def remove_child(self, child_window):

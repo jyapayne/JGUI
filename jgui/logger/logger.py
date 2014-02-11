@@ -1,6 +1,6 @@
 from __future__ import print_function
-from jgui.settings import DEBUG
+import jgui.settings as settings
 
 def log(*args):
-    if DEBUG:
+    if settings.DEBUG:
         print(*args)

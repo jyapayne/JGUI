@@ -11,22 +11,24 @@ from pandac.PandaModules import *
 from testclasses import *
 
 class Test(ShowBase):
-    def __init__(self, width=1024, height=1024):
+    def __init__(self, width=800, height=600):
         ShowBase.__init__(self)
         self._render = True
         self.width = width
         self.height = height
         props = WindowProperties()
+        props.setCursorHidden(True)
         props.setSize(width, height)
         base.setBackgroundColor(0.5,1,1,1)
-        base.cam.setPos(0,-3.7,0)
+        base.cam.setPos(0,-10,0)
         base.win.requestProperties(props)
-        base.disableMouse()
         c = CardMaker('plane')
         c.setFrame(-1, 1, 1, -1)
         c.setHasUvs(True)
         screen = render2d.attachNewNode(c.generate())
         screen.setTransparency(TransparencyAttrib.MAlpha)
+        screen.setPos(0,0,0)
+        base.buttonThrowers[0].node().setMoveEvent('mouse_move')
 
         self.surf = TestSurface([width, height])
 
@@ -76,7 +78,8 @@ class Test(ShowBase):
     def drawall(self, task):
         if self._render:
             self.surf.draw()
-            self.cairoTexture.setRamImage(self.surf.csurface.get_data())
+            ri = self.cairoTexture.modifyRamImage()
+            ri.setData(self.surf.csurface.get_data())
             return task.cont
 
     def mousemove(self, task):

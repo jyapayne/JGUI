@@ -5,6 +5,7 @@ from jgui.settings import IMG_DIR
 class TestSurface(Surface):
     def __init__(self, *args, **kwargs):
         super(TestSurface, self).__init__(*args, **kwargs)
+        self.show_fps = True
         my_win = Window('child',
                         position=[0,0],
                         size=[500,200],
@@ -16,8 +17,8 @@ class TestSurface(Surface):
                         border_radius=[40,20],
                         border_color=(0,0,0),
                         background_color=(1,1,1),
-                        clip_children=True,
                         ignore_debug=True,
+                        clip_children=True,
                         background_image=os.path.join(IMG_DIR, 'wrench.png'),
                         background_image_filter='bilinear',
                         background_image_keep_ratio=True,
@@ -52,7 +53,7 @@ class TestSurface(Surface):
                             background_image_keep_ratio=True,
                             background_image_center_vertical=False,
                             background_image_center_horizontal=False,
-                            gradient=Gradient(stops=[(0, Color(1,1,1)), (0.8, Color(0.5,0.5,0.5)), (1, Color(0.7,0.7,0.7))]))
+                            gradient=Gradient(stops=[(0, Color(1,1,1)), (0.8, Color(0.5,0.5,0.5, 0.5)), (1, Color(0.7,0.7,0.7,0.5))]))
 
         my_win2.add_child(TextWindow('text2',"I haven't had a bean in forever.",
                                     position=[20,100], size=[200, 100],
