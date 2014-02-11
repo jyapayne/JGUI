@@ -36,7 +36,7 @@ class TestSurface(Surface):
         self.root_window.add_child(my_win)
 
         my_win2 = Window('linear_gradient',
-                            position=[400, 400],
+                            position=[300, 200],
                             size=[500,500],
                             draggable=True,
                             resizable=True,
@@ -55,7 +55,7 @@ class TestSurface(Surface):
                             gradient=Gradient(stops=[(0, Color(1,1,1)), (0.8, Color(0.5,0.5,0.5)), (1, Color(0.7,0.7,0.7))]))
 
         my_win2.add_child(TextWindow('text2',"I haven't had a bean in forever.",
-                                    position=[20,20], size=[200, 100],
+                                    position=[20,100], size=[200, 100],
                                     resizable=False, clip_children=True,
                                     font_color=(0,0,0), padding=20,
                                     draggable=False))
