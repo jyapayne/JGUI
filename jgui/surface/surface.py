@@ -16,6 +16,7 @@ class Surface(WindowEventSource):
         self.show_fps = show_fps
         self.size = Size.from_value(size)
         self.mouse_pos = Position()
+        self.drawing = False
         if context is None:
             if data is not None:
                 self.csurface = cairo.ImageSurface.create_for_data(data, cairo.FORMAT_ARGB32, self.size.width, self.size.height)
@@ -24,7 +25,7 @@ class Surface(WindowEventSource):
             self.context = cairo.Context(self.csurface)
         else:
             self.context = context
-        self.root_window = Window('root', position=Position(0,0), size=self.size, context=self.context, surface=self)
+        self.root_window = Window('root', position=Position(0,0), size=self.size, context=self.context, surface=self, ignore_debug=True)
         self.render_mouse = render_mouse
         if self.render_mouse:
             self.mouse_icon = Mouse('mouse', position=Position(0, 0), size=Size(12,20), context=self.context, surface=self)
@@ -38,7 +39,7 @@ class Surface(WindowEventSource):
         self.old_time = datetime.now()
         self.dtindex = 0
         self.max_samples = 60
-        self.dtlist = range(self.max_samples)
+        self.dtlist = [0]*self.max_samples
 
         self.accept('mouse-move', self.process_mouse_move)
 
@@ -51,6 +52,12 @@ class Surface(WindowEventSource):
     def inject_mouse_down(self, button):
         self.current_focused_window = self.current_hover_window
         self.root_window.inject_mouse_down(button)
+
+    def inject_mouse_double(self, button):
+        self.root_window.inject_mouse_double(button)
+
+    def inject_mouse_wheel(self, value):
+        self.root_window.inject_mouse_wheel(value)
 
     def inject_mouse_up(self, button):
         self.root_window.inject_mouse_up(button)
@@ -121,6 +128,7 @@ class Surface(WindowEventSource):
         return 1.0/(sum(self.dtlist)/float(self.max_samples))
 
     def draw(self):
+        self.drawing = True
         if self.show_fps:
             self.dt = (datetime.now() - self.old_time).total_seconds()
             self.old_time = datetime.now()
@@ -133,6 +141,7 @@ class Surface(WindowEventSource):
         self.context.set_operator(cairo.OPERATOR_OVER)
         for window in self.windows:
             window.draw()
+        self.drawing = False
 
 
 class WindowSurface(object):
@@ -876,44 +885,70 @@ class Window(WindowEventSource, WindowSurface):
             return l[-1]
 
     def inject_mouse_down(self, button):
-        if self.mouse_inside():
-            log(button, self.name)
-            self.mouse_inputs[button] = True
-            self.mouse_down = True
-            self.grab_focus()
-            self.dispatch(button, self, self.mouse_pos)
-        else:
-            self.release_focus()
+        stack = [self]
+        while stack:
+            item = stack.pop()
+            if item.mouse_inside():
+                log(button, item.name)
+                item.mouse_inputs[button] = True
+                item.mouse_down = True
+                item.grab_focus()
+                item.dispatch(button, item, item.mouse_pos)
+            else:
+                item.release_focus()
+            if item.children:
+                stack.extend(item.children)
 
-        for child in self.children:
-            child.inject_mouse_down(button)
+    def inject_mouse_double(self, button):
+        stack = [self]
+        while stack:
+            item = stack.pop()
+            if item.mouse_inside():
+                log(button+'-double', item.name)
+                item.dispatch(button+'-double', item, item.mouse_pos)
+            if item.children:
+                stack.extend(item.children)
 
     def inject_mouse_up(self, button):
-        if self.mouse_held() and self.mouse_inputs[button]:
-            log(button+'-up', self.name)
-            self.mouse_down = False
-            self.mouse_inputs[button] = False
-            self.dispatch('{}-up'.format(button), self, self.mouse_pos)
-        for child in self.children:
-            child.inject_mouse_up(button)
+        stack = [self]
+        while stack:
+            item = stack.pop()
+            if item.mouse_held() and item.mouse_inputs[button]:
+                log(button+'-up', item.name)
+                item.mouse_down = False
+                item.mouse_inputs[button] = False
+                item.dispatch('{}-up'.format(button), item, item.mouse_pos)
+            if item.children:
+                stack.extend(item.children)
+
 
     def inject_mouse_position(self, pos):
         mouse_pos = Position.from_value(pos)
-        diff = mouse_pos - self.mouse_pos
-        old_pos = self.mouse_pos
-        self.mouse_pos = mouse_pos
-        if diff != Position(0,0):
-            self.dispatch('mouse-move', self, old_pos, self.mouse_pos)
-            if self.focused and self.mouse_down:
-                for button, down in self.mouse_inputs.items():
-                    if down:
-                        self.dispatch('{}-drag'.format(button), self, self.mouse_pos)
-                        self.dispatch('drag', self, self.mouse_pos)
-        for child in self.children:
-            child.inject_mouse_position(pos)
+        stack = [self]
+        while stack:
+            item = stack.pop()
+            diff = mouse_pos - item.mouse_pos
+            old_pos = item.mouse_pos
+            item.mouse_pos = mouse_pos
+            if diff != Position(0,0):
+                item.dispatch('mouse-move', item, old_pos, self.mouse_pos)
+                if item.focused and item.mouse_down:
+                    for button, down in item.mouse_inputs.items():
+                        if down:
+                            item.dispatch('{}-drag'.format(button), item, self.mouse_pos)
+                            item.dispatch('drag', item, self.mouse_pos)
+            if item.children:
+                stack.extend(item.children)
 
     def inject_mouse_wheel(self, value):
-        self.dispatch('scroll', self, value)
+        stack = [self]
+        while stack:
+            item = stack.pop()
+            if item.mouse_inside():
+                log(item.name, 'scroll', value)
+                item.dispatch('scroll', item, value)
+            if item.children:
+                stack.extend(item.children)
 
     def grab_focus(self):
         self.focused = True
@@ -933,7 +968,7 @@ class Window(WindowEventSource, WindowSurface):
 
     def release_focus(self):
         if self.focused:
-            log('released', self.name)
+            log('focus-lost', self.name)
             self.focused = False
             self.mouse_down = False
             #clear events that may have been triggered

@@ -15,6 +15,7 @@ class JGUIWidget(gtk.DrawingArea):
         self.connect("button_press_event", self.mouse_down)
         self.connect("button_release_event", self.mouse_up)
         self.connect("configure_event", self.resize_win)
+        self.connect("scroll_event", self.mouse_scroll)
         self.add_events(gdk.BUTTON_PRESS_MASK | gdk.BUTTON_RELEASE_MASK | gdk.POINTER_MOTION_MASK)
         gobject.timeout_add(int((1.0/60.0)*1000), self.tick)
         self.width, self.height = width, height
@@ -24,7 +25,17 @@ class JGUIWidget(gtk.DrawingArea):
         self.surf.inject_mouse_up(self.buttons[event.button])
 
     def mouse_down(self, widget, event):
-        self.surf.inject_mouse_down(self.buttons[event.button])
+        if event.type == gtk.gdk.BUTTON_PRESS:
+            self.surf.inject_mouse_down(self.buttons[event.button])
+        elif event.type == gtk.gdk._2BUTTON_PRESS:
+            self.surf.inject_mouse_double(self.buttons[event.button])
+
+    def mouse_scroll(self, widget, event):
+        if event.direction == gtk.gdk.SCROLL_UP:
+            direction = 1
+        else:
+            direction = -1
+        self.surf.inject_mouse_wheel(direction)
 
     def resize_win(self, widget, event):
         self.surf.notify_window_resize(event.width, event.height)
